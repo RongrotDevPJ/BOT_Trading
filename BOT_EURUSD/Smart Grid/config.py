@@ -23,6 +23,15 @@ TRAILING_STEP_POINTS = 10 # Only move SL if profit increases by >= 10 points
 MAX_SPREAD_POINTS = 30
 MAX_DD_PERCENT = 30.0 # Stop trading if drawdown > 30%
 HEARTBEAT_INTERVAL_SEC = 300 # 5 minutes
+COOLDOWN_MINUTES = 15 # Wait at least 15 min between grid levels
+
+# --- Advanced Portfolio Protections ---
+ENABLE_PARTIAL_CLOSE = True
+MIN_POSITIONS_FOR_PARTIAL = 5 # Start looking for Partial Close if holding 5+ positions
+
+# --- Time Filter ---
+ALLOW_FRIDAY_TRADING = False
+FRIDAY_STOP_HOUR = 15 # Broker time to stop trading on Friday (e.g. 15:00)
 
 # MT5 Account Credentials (leave empty if already logged into terminal)
 MT5_SERVER = ""

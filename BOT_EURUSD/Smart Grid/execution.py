@@ -144,6 +144,60 @@ class TradeExecutor:
              self._handle_retcode(result, request)
              return False
 
+    def close_position(self, position, tick):
+         """Sends an inverse market order to close a single position."""
+         order_type = ag.ORDER_TYPE_SELL if position.type == 0 else ag.ORDER_TYPE_BUY
+         price = tick.bid if order_type == ag.ORDER_TYPE_SELL else tick.ask
+         
+         request = {
+             "action": ag.TRADE_ACTION_DEAL,
+             "symbol": position.symbol,
+             "volume": position.volume,
+             "type": order_type,
+             "position": position.ticket, # Specific ticket to close
+             "price": price,
+             "deviation": 20,
+             "magic": config.MAGIC_NUMBER,
+             "comment": "Bot Partial Close",
+             "type_time": ag.ORDER_TIME_GTC,
+             "type_filling": ag.ORDER_FILLING_IOC,
+         }
+         
+         self.logger.info(f"Closing Position {position.ticket}")
+         result = ag.order_send(request)
+         return self._handle_retcode(result, request)
+
+    def manage_partial_close(self, positions, tick):
+         """
+         If we have too many positions (e.g. >= 5), we find the oldest losing trade
+         and the newest profitable trade. If Total Profit of both >= 0 => Close Both to reduce load.
+         """
+         if not config.ENABLE_PARTIAL_CLOSE or tick is None:
+              return
+
+         buy_pos = [p for p in positions if p.type == 0]
+         sell_pos = [p for p in positions if p.type == 1]
+
+         for side_positions in (buy_pos, sell_pos):
+              if len(side_positions) >= config.MIN_POSITIONS_FOR_PARTIAL:
+                  # Sort oldest to newest (by time)
+                  side_positions.sort(key=lambda x: x.time)
+                  
+                  oldest = side_positions[0] # Usually the one with Max DD
+                  newest = side_positions[-1] # Usually the fastest to flip to profit
+                  
+                  # Compare total floating profit of the TWO
+                  total_profit_cents = oldest.profit + newest.profit
+                  
+                  # If positive (or 0), close the pair to reduce margin load safely
+                  if total_profit_cents >= 0:
+                       self.logger.warning(f"PARTIAL CLOSE TRIGGERED! Closing Ticket {oldest.ticket} and {newest.ticket}. Combined PnL={total_profit_cents}")
+                       self.close_position(newest, tick) # Close profitable first
+                       self.close_position(oldest, tick) # Then close the loser
+                       
+                       # We stop checking to avoid modifying lists while closing
+                       return
+
     def _handle_retcode(self, result, request):
         """Processes MetaTrader 5 return codes with descriptive logging."""
         

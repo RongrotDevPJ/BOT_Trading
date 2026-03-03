@@ -98,6 +98,13 @@ class SmartGridStrategy:
         # Find the most recently opened position in this direction
         latest_position = max(positions, key=lambda p: p.time)
         
+        # Cooldown check: prevent opening trades too quickly
+        current_time_sec = ag.time_current()
+        if current_time_sec is not None:
+             time_since_last_pos = current_time_sec - latest_position.time
+             if time_since_last_pos < (config.COOLDOWN_MINUTES * 60):
+                  return False
+
         point = ag.symbol_info(config.SYMBOL).point
         distance_points = abs(current_price - latest_position.price_open) / point
         

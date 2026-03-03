@@ -4,6 +4,7 @@ from mt5_client import MT5Client
 from execution import TradeExecutor
 from strategy import SmartGridStrategy
 from indicator import IndicatorClient
+from time_filter import TimeFilterClient
 import config
 
 # Setup Logging
@@ -24,6 +25,7 @@ def main():
     executor = TradeExecutor(client)
     strategy = SmartGridStrategy()
     indicator_client = IndicatorClient()
+    time_filter = TimeFilterClient()
 
     # Try to connect
     if not client.connect():
@@ -62,14 +64,21 @@ def main():
                 # Fetch RSI for initial entry possibility
                 current_rsi = indicator_client.get_rsi(config.SYMBOL, config.TIMEFRAME, config.RSI_PERIOD)
                 
-                # Check initial entry (if no grid active)
-                strategy.check_initial_entry(executor, current_rsi, tick)
+                # Check Time Filter before allowing NEW initial entries
+                if time_filter.is_allowed_to_trade():
+                    # Check initial entry (if no grid active)
+                    strategy.check_initial_entry(executor, current_rsi, tick)
 
-                # Execute grid logic (DCA if needed)
+                # Execute grid logic (DCA if needed - we allow DCA even if time filter is active to save account)
                 strategy.check_grid_logic(executor)
                 
-                # Manage Trailing Stops (Lock Profit)
+                # Manage positions
                 positions = strategy.get_positions()
+                
+                # 1. Partial Close (Hedging bad trades with good ones)
+                executor.manage_partial_close(positions, tick)
+                
+                # 2. Trailing Stops (Lock Profit)
                 executor.manage_trailing_stop(positions, tick)
 
             except Exception as e:
