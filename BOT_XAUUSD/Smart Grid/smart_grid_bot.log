@@ -343,5 +343,3 @@ AttributeError: module 'MetaTrader5' has no attribute 'time_current'
 2026-03-03 16:22:41,289 - execution - INFO - Order executed successfully! Ticket: 3518132561
 2026-03-03 16:24:00,414 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 130.84 Balance: 131.50
 2026-03-03 16:29:00,920 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 131.11 Balance: 131.50
-2026-03-03 16:34:01,422 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 130.96 Balance: 131.50
-2026-03-03 16:39:01,930 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 130.76 Balance: 131.50
