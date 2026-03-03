@@ -1,0 +1,338 @@
+2026-03-03 16:12:00,680 - MainControl - INFO - Starting Smart Grid MT5 Bot...
+2026-03-03 16:12:00,697 - mt5_client - INFO - Successfully connected to MetaTrader 5
+2026-03-03 16:12:00,851 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:01,861 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:02,881 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:03,911 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:04,913 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:05,960 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:06,962 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:07,964 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:08,966 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:10,072 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:11,109 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:12,115 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:13,118 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:14,120 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:15,123 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:16,125 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:17,127 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:18,130 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:19,132 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:20,135 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:21,138 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:22,140 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:23,142 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:24,144 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:25,146 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:26,149 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:27,151 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:28,154 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:29,158 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:30,161 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:31,163 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:32,165 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:33,167 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:34,169 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:35,171 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:36,174 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:37,176 - MainControl - ERROR - Error during strategy execution: module 'MetaTrader5' has no attribute 'time_current'
+Traceback (most recent call last):
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\main.py", line 68, in main
+    if time_filter.is_allowed_to_trade():
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\lunza\Documents\VSCode Git\BOT_Trading\BOT_EURUSD\Smart Grid\time_filter.py", line 16, in is_allowed_to_trade
+    broker_time_stamp = ag.time_current()
+                        ^^^^^^^^^^^^^^^
+AttributeError: module 'MetaTrader5' has no attribute 'time_current'
+2026-03-03 16:12:37,340 - MainControl - INFO - Bot stopped by user (KeyboardInterrupt).
+2026-03-03 16:12:37,341 - MainControl - INFO - Shutting down MT5 connection...
+2026-03-03 16:12:37,341 - MainControl - INFO - Bot stopped gracefully.

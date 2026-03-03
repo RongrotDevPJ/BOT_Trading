@@ -110,8 +110,9 @@ class SmartGridStrategy:
         latest_position = max(positions, key=lambda p: p.time)
         
         # Cooldown check: prevent opening trades too quickly
-        current_time_sec = ag.time_current()
-        if current_time_sec is not None:
+        symbol_info = ag.symbol_info(config.SYMBOL)
+        if symbol_info is not None:
+             current_time_sec = symbol_info.time
              time_since_last_pos = current_time_sec - latest_position.time
              if time_since_last_pos < (config.COOLDOWN_MINUTES * 60):
                   return False

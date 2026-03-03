@@ -12,12 +12,14 @@ class TimeFilterClient:
         Checks if the bot is currently allowed to open new positions
         based on Time Filters (e.g., Friday late afternoon).
         """
-        # Get current time from broker server
-        broker_time_stamp = ag.time_current()
-        if broker_time_stamp is None:
+        # Get current time from broker server using symbol info
+        symbol_info = ag.symbol_info(config.SYMBOL)
+        if symbol_info is None:
             # If we can't get broker time, err on the side of caution or rely on local loop retries
             self.logger.warning("Could not retrieve broker time for time filter.")
             return False
+
+        broker_time_stamp = symbol_info.time
 
         broker_time = datetime.fromtimestamp(broker_time_stamp)
         
