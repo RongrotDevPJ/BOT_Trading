@@ -5,6 +5,8 @@ START_LOT = 0.01
 # --- Smart Grid Settings ---
 GRID_DISTANCE_POINTS = 150 # Base distance (15 Pips)
 GRID_MULTIPLIER = 1.2 # Distance multiplier for each sub-level
+LOT_MULTIPLIER = 1.2 # Multiply lot size for each grid level
+MAX_LOT = 0.1 # Maximum lot size allowed to protect Cent account
 BASKET_TP_POINTS = 100 # Break-even profit target (10 Pips)
 
 # --- Initial Entry Setup ---
@@ -24,6 +26,7 @@ MAX_SPREAD_POINTS = 30
 MAX_DD_PERCENT = 30.0 # Stop trading if drawdown > 30%
 HEARTBEAT_INTERVAL_SEC = 300 # 5 minutes
 COOLDOWN_MINUTES = 15 # Wait at least 15 min between grid levels
+MAX_GAP_MULTIPLIER = 3.0 # Pause trading if gap exceeds 3x the grid distance (Crash Recovery)
 
 # --- Advanced Portfolio Protections ---
 ENABLE_PARTIAL_CLOSE = True

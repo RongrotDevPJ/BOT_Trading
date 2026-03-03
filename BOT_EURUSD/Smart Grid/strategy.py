@@ -87,6 +87,17 @@ class SmartGridStrategy:
          multiplier = config.GRID_MULTIPLIER ** (num_positions - 1)
          return config.GRID_DISTANCE_POINTS * multiplier
 
+    def get_dynamic_lot(self, num_positions):
+         """Calculates lot size based on multiplier, up to MAX_LOT."""
+         # If 1 open trade, num_positions=1, next lot is base * multiplier ^ 1
+         lot = config.START_LOT * (config.LOT_MULTIPLIER ** num_positions)
+         lot = round(lot, 2) # Format for Cent accounts (2 decimal places)
+         
+         if lot > config.MAX_LOT:
+             lot = config.MAX_LOT
+             
+         return lot
+
     def needs_new_grid_level(self, positions, current_price, side):
         """
         Determines if price has moved far enough to open a new grid level.
@@ -109,6 +120,12 @@ class SmartGridStrategy:
         distance_points = abs(current_price - latest_position.price_open) / point
         
         required_distance = self.get_dynamic_grid_distance(len(positions))
+
+        # Crash Recovery / Max Gap check
+        max_allowed_distance = required_distance * config.MAX_GAP_MULTIPLIER
+        if distance_points > max_allowed_distance:
+             self.logger.warning(f"Price gapped too far! ({distance_points:.1f} > {max_allowed_distance:.1f} max). Pausing safely.")
+             return False
 
         if distance_points >= required_distance:
             # Check direction of movement relative to side
@@ -141,8 +158,9 @@ class SmartGridStrategy:
         # Process Buy Grid
         if buy_positions:
             if self.needs_new_grid_level(buy_positions, current_ask, side=0):
-                self.logger.info(f"Opening new BUY Grid Level. Total Buys: {len(buy_positions)}")
-                executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, config.START_LOT, current_ask)
+                dynamic_lot = self.get_dynamic_lot(len(buy_positions))
+                self.logger.info(f"Opening BUY Grid. Level: {len(buy_positions)+1}, Lot: {dynamic_lot}")
+                executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, dynamic_lot, current_ask)
                 
             if not config.USE_TRAILING_STOP:
                 new_tp = self.calculate_basket_tp(buy_positions, side=0)
@@ -151,8 +169,9 @@ class SmartGridStrategy:
         # Process Sell Grid
         if sell_positions:
              if self.needs_new_grid_level(sell_positions, current_bid, side=1):
-                 self.logger.info(f"Opening new SELL Grid Level. Total Sells: {len(sell_positions)}")
-                 executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, config.START_LOT, current_bid)
+                 dynamic_lot = self.get_dynamic_lot(len(sell_positions))
+                 self.logger.info(f"Opening SELL Grid. Level: {len(sell_positions)+1}, Lot: {dynamic_lot}")
+                 executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, dynamic_lot, current_bid)
                  
              if not config.USE_TRAILING_STOP:
                  new_tp = self.calculate_basket_tp(sell_positions, side=1)
