@@ -60,15 +60,39 @@ class SmartGridStrategy:
              
         return basket_tp
 
+    def check_initial_entry(self, executor, current_rsi, tick):
+        """Checks RSI to determine if a first trade should be opened."""
+        if current_rsi is None or tick is None:
+            return
+
+        positions = self.get_positions()
+        if len(positions) > 0:
+            return # Grid is already active, do not open primary entry
+
+        if current_rsi < config.RSI_BUY_LEVEL:
+            self.logger.info(f"RSI={current_rsi:.2f} < {config.RSI_BUY_LEVEL}. Opening Initial BUY.")
+            executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, config.START_LOT, tick.ask)
+            
+        elif current_rsi > config.RSI_SELL_LEVEL:
+            self.logger.info(f"RSI={current_rsi:.2f} > {config.RSI_SELL_LEVEL}. Opening Initial SELL.")
+            executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, config.START_LOT, tick.bid)
+
+    def get_dynamic_grid_distance(self, num_positions):
+         """Calculates distance based on base distance and multiplier."""
+         # For 1st position (0 existing), distance is base. 2nd uses base * multiplier^1, etc.
+         if num_positions <= 1:
+             return config.GRID_DISTANCE_POINTS
+         
+         # e.g. level 2 = base * 1.2, level 3 = base * 1.44
+         multiplier = config.GRID_MULTIPLIER ** (num_positions - 1)
+         return config.GRID_DISTANCE_POINTS * multiplier
+
     def needs_new_grid_level(self, positions, current_price, side):
         """
         Determines if price has moved far enough to open a new grid level.
         Positions should be sorted by time (oldest first or newest first) to find the LAST opened level.
         """
         if not positions:
-           # No positions, we don't open a grid level (first trade is manual or handled elsewhere)
-           # Note: Depending on your exact logic, you might want the bot to open the FIRST trade automatically.
-           # I'll add logic for auto-starting later if requested, but normally Grid bots wait for a signal or manual entry.
            return False
 
         # Find the most recently opened position in this direction
@@ -76,8 +100,10 @@ class SmartGridStrategy:
         
         point = ag.symbol_info(config.SYMBOL).point
         distance_points = abs(current_price - latest_position.price_open) / point
+        
+        required_distance = self.get_dynamic_grid_distance(len(positions))
 
-        if distance_points >= config.GRID_DISTANCE_POINTS:
+        if distance_points >= required_distance:
             # Check direction of movement relative to side
             if side == 0 and current_price < latest_position.price_open:
                 # Price dropped below last buy order, open new buy
@@ -111,9 +137,9 @@ class SmartGridStrategy:
                 self.logger.info(f"Opening new BUY Grid Level. Total Buys: {len(buy_positions)}")
                 executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, config.START_LOT, current_ask)
                 
-            # Update Basket TP for all Buy positions
-            new_tp = self.calculate_basket_tp(buy_positions, side=0)
-            self._update_tps_if_needed(executor, buy_positions, new_tp)
+            if not config.USE_TRAILING_STOP:
+                new_tp = self.calculate_basket_tp(buy_positions, side=0)
+                self._update_tps_if_needed(executor, buy_positions, new_tp)
 
         # Process Sell Grid
         if sell_positions:
@@ -121,9 +147,9 @@ class SmartGridStrategy:
                  self.logger.info(f"Opening new SELL Grid Level. Total Sells: {len(sell_positions)}")
                  executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, config.START_LOT, current_bid)
                  
-             # Update Basket TP for all Sell positions
-             new_tp = self.calculate_basket_tp(sell_positions, side=1)
-             self._update_tps_if_needed(executor, sell_positions, new_tp)
+             if not config.USE_TRAILING_STOP:
+                 new_tp = self.calculate_basket_tp(sell_positions, side=1)
+                 self._update_tps_if_needed(executor, sell_positions, new_tp)
              
     def _update_tps_if_needed(self, executor, positions, new_tp):
          """Helper to iterate and modify TPs only if they differ significantly."""
@@ -134,3 +160,4 @@ class SmartGridStrategy:
          for p in positions:
              if abs(p.tp - new_tp) > tolerance:
                  executor.modify_tp(p.ticket, config.SYMBOL, new_tp)
+

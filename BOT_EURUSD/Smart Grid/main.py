@@ -3,6 +3,7 @@ import logging
 from mt5_client import MT5Client
 from execution import TradeExecutor
 from strategy import SmartGridStrategy
+from indicator import IndicatorClient
 import config
 
 # Setup Logging
@@ -22,6 +23,7 @@ def main():
     client = MT5Client()
     executor = TradeExecutor(client)
     strategy = SmartGridStrategy()
+    indicator_client = IndicatorClient()
 
     # Try to connect
     if not client.connect():
@@ -51,8 +53,25 @@ def main():
 
             # 3. Core Strategy Logic
             try:
-                # Wrap inside try-except to prevent one bad loop from crashing the bot
+                # Fetch tick data globally for all checks to ensure consistency
+                tick = client.get_tick(config.SYMBOL)
+                if tick is None:
+                    time.sleep(1)
+                    continue
+
+                # Fetch RSI for initial entry possibility
+                current_rsi = indicator_client.get_rsi(config.SYMBOL, config.TIMEFRAME, config.RSI_PERIOD)
+                
+                # Check initial entry (if no grid active)
+                strategy.check_initial_entry(executor, current_rsi, tick)
+
+                # Execute grid logic (DCA if needed)
                 strategy.check_grid_logic(executor)
+                
+                # Manage Trailing Stops (Lock Profit)
+                positions = strategy.get_positions()
+                executor.manage_trailing_stop(positions, tick)
+
             except Exception as e:
                 logger.error(f"Error during strategy execution: {e}", exc_info=True)
 

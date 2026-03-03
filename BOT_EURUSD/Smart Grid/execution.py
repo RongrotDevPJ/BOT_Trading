@@ -36,6 +36,11 @@ class TradeExecutor:
 
         # Normalize prices
         price = self.normalize_price(price, symbol)
+        
+        if config.USE_TRAILING_STOP:
+            # If using Trailing Stop, we don't set a hard TP right away
+            tp = 0.0
+            
         if sl > 0: sl = self.normalize_price(sl, symbol)
         if tp > 0: tp = self.normalize_price(tp, symbol)
 
@@ -64,6 +69,61 @@ class TradeExecutor:
 
         # Handle retcodes
         return self._handle_retcode(result, request)
+
+    def modify_sl(self, ticket, symbol, new_sl):
+         """Modifies the stop loss of an existing order."""
+         new_sl = self.normalize_price(new_sl, symbol)
+         request = {
+             "action": ag.TRADE_ACTION_SLTP,
+             "symbol": symbol,
+             "position": ticket,
+             "sl": new_sl,
+             "magic": config.MAGIC_NUMBER
+         }
+         
+         result = ag.order_send(request)
+         if result and result.retcode == ag.TRADE_RETCODE_DONE:
+             self.logger.info(f"Successfully modified SL (Trailing) for position {ticket} to {new_sl}")
+             return True
+         else:
+             self._handle_retcode(result, request)
+             return False
+
+    def manage_trailing_stop(self, positions, tick):
+        """
+        Manages trailing stops for all open positions.
+        Called on every tick.
+        """
+        if not config.USE_TRAILING_STOP or not positions or tick is None:
+            return
+
+        point = ag.symbol_info(config.SYMBOL).point
+        trail_points = config.TRAILING_STOP_POINTS * point
+        step_points = config.TRAILING_STEP_POINTS * point
+        
+        for p in positions:
+            if p.type == 0: # BUY
+                # Calculate profit in price difference
+                profit_distance = tick.bid - p.price_open
+                
+                # Check if we are past the break-even + basket target
+                if profit_distance > (config.BASKET_TP_POINTS * point):
+                    new_sl = tick.bid - trail_points
+                    
+                    # Only move SL up, and only if it moves more than step_points
+                    if p.sl == 0.0 or (new_sl - p.sl) >= step_points:
+                        self.modify_sl(p.ticket, config.SYMBOL, new_sl)
+                        
+            elif p.type == 1: # SELL
+                profit_distance = p.price_open - tick.ask
+                
+                if profit_distance > (config.BASKET_TP_POINTS * point):
+                    new_sl = tick.ask + trail_points
+                    
+                    # Only move SL down, and only if it moves more than step_points
+                    # p.sl == 0.0 means SL hasn't been set yet
+                    if p.sl == 0.0 or (p.sl - new_sl) >= step_points:
+                        self.modify_sl(p.ticket, config.SYMBOL, new_sl)
 
     def modify_tp(self, ticket, symbol, new_tp):
          """Modifies the take profit of an existing order."""
