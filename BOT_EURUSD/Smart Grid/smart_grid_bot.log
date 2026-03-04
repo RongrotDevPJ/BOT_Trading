@@ -376,3 +376,20 @@ AttributeError: module 'MetaTrader5' has no attribute 'time_current'
 2026-03-04 11:25:52,483 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 140.95 Balance: 140.95
 2026-03-04 11:30:53,416 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 140.95 Balance: 140.95
 2026-03-04 11:35:54,236 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 140.95 Balance: 140.95
+2026-03-04 11:40:55,202 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 140.95 Balance: 140.95
+2026-03-04 11:45:55,203 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 140.95 Balance: 140.95
+2026-03-04 11:50:56,012 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 140.95 Balance: 140.95
+2026-03-04 11:55:56,903 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 140.95 Balance: 140.95
+2026-03-04 12:00:57,628 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 140.95 Balance: 140.95
+2026-03-04 12:05:58,626 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 140.95 Balance: 140.95
+2026-03-04 12:10:59,615 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 140.95 Balance: 140.95
+2026-03-04 12:15:59,724 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 140.95 Balance: 140.95
+2026-03-04 12:21:00,682 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 140.95 Balance: 140.95
+2026-03-04 12:26:00,700 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 140.95 Balance: 140.95
+2026-03-04 12:31:01,598 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 140.95 Balance: 140.95
+2026-03-04 12:36:02,565 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 140.95 Balance: 140.95
+2026-03-04 12:41:02,625 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 140.95 Balance: 140.95
+2026-03-04 12:44:20,396 - strategy - INFO - RSI=29.83 < 30. Opening Initial BUY.
+2026-03-04 12:44:20,398 - execution - INFO - Sending Order Request: Type=0, Lot=0.01, Price=1.15899
+2026-03-04 12:44:20,965 - execution - INFO - Order executed successfully! Ticket: 3519088498
+2026-03-04 12:46:03,301 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 140.65 Balance: 140.95
