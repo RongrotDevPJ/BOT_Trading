@@ -3,20 +3,20 @@ SYMBOL = "AUDNZD"
 MAGIC_NUMBER = 444444 # For AUDNZD
 
 # --- Trading Mode ---
-START_LOT = 0.01 # Base lot size for the first trade
+START_LOT = 0.05 # Base lot size for the first trade
 MAX_DEVIATION = 100 # Allow 100 points slippage for Gold volatility
 
 # --- Risk Management & Auto-Lot ---
 AUTO_LOT = True             # Enable dynamic lot sizing based on equity
 CENTS_PER_01_LOT = 1000     # Equity required per 0.01 lot step
-MIN_START_LOT = 0.01        # Minimum allowed base lot
-MAX_START_LOT = 0.10        # Maximum allowed base lot
+MIN_START_LOT = 0.05        # Minimum allowed base lot
+MAX_START_LOT = 0.50        # Maximum allowed base lot
 
 # --- Smart Grid Settings ---
 GRID_DISTANCE_POINTS = 120 # Base distance fallback for AUDNZD
 GRID_MULTIPLIER = 1.1 # Distance multiplier for each sub-level
 LOT_MULTIPLIER = 1.2 # Multiply lot size for each grid level
-MAX_LOT = 0.1 # Maximum lot size allowed
+MAX_LOT = 0.5 # Maximum lot size allowed
 MAX_POSITIONS = 10 # Max positions to open
 BASKET_TP_DOLLARS = 0.5 # Basket TP in Dollars (0.5 Cent for cent accounts)
 BASKET_TP_POINTS = 100 # Fallback

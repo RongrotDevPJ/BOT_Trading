@@ -1,18 +1,18 @@
 SYMBOL = "EURUSD"
 MAGIC_NUMBER = 123456
-START_LOT = 0.01
+START_LOT = 0.05
 
 # --- Risk Management & Auto-Lot ---
 AUTO_LOT = True             # Enable dynamic lot sizing based on equity
 CENTS_PER_01_LOT = 1000     # Equity required per 0.01 lot step
-MIN_START_LOT = 0.01        # Minimum allowed base lot
-MAX_START_LOT = 0.10        # Maximum allowed base lot
+MIN_START_LOT = 0.05        # Minimum allowed base lot
+MAX_START_LOT = 0.50        # Maximum allowed base lot
 
 # --- Smart Grid Settings ---
 GRID_DISTANCE_POINTS = 150 # Base distance (15 Pips)
 GRID_MULTIPLIER = 1.2 # Distance multiplier for each sub-level
 LOT_MULTIPLIER = 1.2 # Multiply lot size for each grid level
-MAX_LOT = 0.1 # Maximum lot size allowed to protect Cent account
+MAX_LOT = 0.5 # Maximum lot size allowed to protect Cent account
 BASKET_TP_POINTS = 100 # Break-even profit target (10 Pips)
 
 # --- Initial Entry Setup ---

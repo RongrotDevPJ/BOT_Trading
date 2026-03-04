@@ -3,20 +3,20 @@ SYMBOL = "BTCUSD"
 MAGIC_NUMBER = 333333 # For BTCUSD
 
 # --- Trading Mode ---
-START_LOT = 0.01 # Base lot size for the first trade
+START_LOT = 0.05 # Base lot size for the first trade
 MAX_DEVIATION = 100 # Allow 100 points slippage for Gold volatility
 
 # --- Risk Management & Auto-Lot ---
 AUTO_LOT = True             # Enable dynamic lot sizing based on equity
 CENTS_PER_01_LOT = 1000     # Equity required per 0.01 lot step
-MIN_START_LOT = 0.01        # Minimum allowed base lot
-MAX_START_LOT = 0.10        # Maximum allowed base lot
+MIN_START_LOT = 0.05        # Minimum allowed base lot
+MAX_START_LOT = 0.50        # Maximum allowed base lot
 
 # --- Smart Grid Settings ---
 GRID_DISTANCE_POINTS = 1000 # Base distance fallback
 GRID_MULTIPLIER = 1.3 # Distance multiplier for each sub-level (Higher for Gold)
 LOT_MULTIPLIER = 1.1 # Multiply lot size cautiously for each grid level
-MAX_LOT = 0.5 # Maximum lot size allowed to protect Cent account
+MAX_LOT = 1.0 # Maximum lot size allowed to protect Cent account
 BASKET_TP_POINTS = 100 # Break-even profit target (10 Pips)
 MIN_GRID_DISTANCE_POINTS = 300 # Minimum distance for dynamic ATR grid
 
