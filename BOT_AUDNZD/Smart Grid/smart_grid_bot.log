@@ -405,3 +405,25 @@ AttributeError: module 'MetaTrader5' has no attribute 'time_current'
 2026-03-04 14:05:48,959 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 142.68 Balance: 143.10
 2026-03-04 14:10:49,839 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 142.76 Balance: 143.10
 2026-03-04 14:15:50,837 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 142.66 Balance: 143.10
+2026-03-04 14:20:51,760 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 142.95 Balance: 143.10
+2026-03-04 14:25:52,533 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 142.63 Balance: 143.10
+2026-03-04 14:30:53,440 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 142.18 Balance: 143.10
+2026-03-04 14:32:10,343 - MainControl - INFO - Starting Smart Grid MT5 Bot...
+2026-03-04 14:32:10,455 - mt5_client - INFO - Successfully connected to MetaTrader 5
+2026-03-04 14:37:10,800 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 142.15 Balance: 143.10
+2026-03-04 14:42:11,560 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 142.03 Balance: 143.10
+2026-03-04 14:47:11,818 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 142.01 Balance: 143.10
+2026-03-04 14:52:12,117 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 142.29 Balance: 143.10
+2026-03-04 14:57:12,387 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 142.56 Balance: 143.10
+2026-03-04 15:02:13,375 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 143.17 Balance: 143.10
+2026-03-04 15:07:13,468 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 143.50 Balance: 143.10
+2026-03-04 15:12:13,501 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 143.52 Balance: 143.10
+2026-03-04 15:17:13,504 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 143.80 Balance: 143.10
+2026-03-04 15:22:14,351 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 144.18 Balance: 143.10
+2026-03-04 15:27:15,315 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 143.94 Balance: 143.10
+2026-03-04 15:32:15,921 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 144.14 Balance: 144.14
+2026-03-04 15:37:16,121 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 144.14 Balance: 144.14
+2026-03-04 15:42:17,055 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 144.14 Balance: 144.14
+2026-03-04 15:47:17,872 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 144.14 Balance: 144.14
+2026-03-04 15:52:18,769 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 144.14 Balance: 144.14
+2026-03-04 15:57:19,631 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 144.14 Balance: 144.14

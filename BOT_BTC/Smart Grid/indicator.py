@@ -68,6 +68,8 @@ class IndicatorClient:
         # Ensure we only calculate on completed candles if needed, but for real-time we can use the latest (index -1)
         rsi_value = self._calculate_rsi(close_prices, period)
         
+        return rsi_value
+        
     def _calculate_atr(self, rates, period):
         """
         Calculates the Average True Range (ATR) purely using built-in Python.
