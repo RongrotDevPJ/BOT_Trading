@@ -1,5 +1,5 @@
 @echo off
-title MT5 Smart Grid Bot
+title MT5 EURUSD Bot
 color 0A
 
 echo =========================================
