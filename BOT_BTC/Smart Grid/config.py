@@ -6,6 +6,12 @@ MAGIC_NUMBER = 333333 # For BTCUSD
 START_LOT = 0.01 # Base lot size for the first trade
 MAX_DEVIATION = 100 # Allow 100 points slippage for Gold volatility
 
+# --- Risk Management & Auto-Lot ---
+AUTO_LOT = True             # Enable dynamic lot sizing based on equity
+CENTS_PER_01_LOT = 1000     # Equity required per 0.01 lot step
+MIN_START_LOT = 0.01        # Minimum allowed base lot
+MAX_START_LOT = 0.10        # Maximum allowed base lot
+
 # --- Smart Grid Settings ---
 GRID_DISTANCE_POINTS = 1000 # Base distance fallback
 GRID_MULTIPLIER = 1.3 # Distance multiplier for each sub-level (Higher for Gold)
@@ -18,8 +24,8 @@ import MetaTrader5 as ag
 TIMEFRAME = ag.TIMEFRAME_M5
 RSI_TIMEFRAME = ag.TIMEFRAME_M15
 RSI_PERIOD = 14
-RSI_BUY_LEVEL = 35
-RSI_SELL_LEVEL = 65
+RSI_BUY_LEVEL = 40  # Tuned for higher frequency Trades (Option B)
+RSI_SELL_LEVEL = 60 # Tuned for higher frequency Trades (Option B)
 
 # BTC Trend Filters
 EMA_PERIOD = 200

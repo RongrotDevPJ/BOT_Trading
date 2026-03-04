@@ -2,6 +2,12 @@ SYMBOL = "EURUSD"
 MAGIC_NUMBER = 123456
 START_LOT = 0.01
 
+# --- Risk Management & Auto-Lot ---
+AUTO_LOT = True             # Enable dynamic lot sizing based on equity
+CENTS_PER_01_LOT = 1000     # Equity required per 0.01 lot step
+MIN_START_LOT = 0.01        # Minimum allowed base lot
+MAX_START_LOT = 0.10        # Maximum allowed base lot
+
 # --- Smart Grid Settings ---
 GRID_DISTANCE_POINTS = 150 # Base distance (15 Pips)
 GRID_MULTIPLIER = 1.2 # Distance multiplier for each sub-level

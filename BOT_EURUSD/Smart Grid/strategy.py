@@ -88,9 +88,18 @@ class SmartGridStrategy:
          return config.GRID_DISTANCE_POINTS * multiplier
 
     def get_dynamic_lot(self, num_positions):
-         """Calculates lot size based on multiplier, up to MAX_LOT."""
+         """Calculates lot size based on equity and multiplier."""
+         # Calculate dynamic starting lot based on equity if enabled
+         equity = ag.account_info().equity if ag.account_info() else 0
+         
+         if getattr(config, 'AUTO_LOT', False) and equity > 0:
+             calculated_start_lot = (equity / config.CENTS_PER_01_LOT) * 0.01
+             base_lot = max(config.MIN_START_LOT, min(config.MAX_START_LOT, calculated_start_lot))
+         else:
+             base_lot = config.START_LOT
+
          # If 1 open trade, num_positions=1, next lot is base * multiplier ^ 1
-         lot = config.START_LOT * (config.LOT_MULTIPLIER ** num_positions)
+         lot = base_lot * (config.LOT_MULTIPLIER ** num_positions)
          lot = round(lot, 2) # Format for Cent accounts (2 decimal places)
          
          if lot > config.MAX_LOT:

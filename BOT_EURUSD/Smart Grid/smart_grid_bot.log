@@ -393,3 +393,37 @@ AttributeError: module 'MetaTrader5' has no attribute 'time_current'
 2026-03-04 12:44:20,398 - execution - INFO - Sending Order Request: Type=0, Lot=0.01, Price=1.15899
 2026-03-04 12:44:20,965 - execution - INFO - Order executed successfully! Ticket: 3519088498
 2026-03-04 12:46:03,301 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 140.65 Balance: 140.95
+2026-03-04 12:51:04,155 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 141.46 Balance: 140.95
+2026-03-04 12:56:04,972 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 141.42 Balance: 140.95
+2026-03-04 13:01:05,965 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 141.29 Balance: 140.95
+2026-03-04 13:06:06,377 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 141.05 Balance: 140.95
+2026-03-04 13:11:06,586 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 141.37 Balance: 140.95
+2026-03-04 13:16:06,846 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 141.46 Balance: 140.95
+2026-03-04 13:21:07,315 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 141.68 Balance: 140.95
+2026-03-04 13:21:58,841 - execution - INFO - Successfully modified SL (Trailing) for position 3519088498 to 1.15954
+2026-03-04 13:25:42,943 - execution - INFO - Successfully modified SL (Trailing) for position 3519088498 to 1.15968
+2026-03-04 13:25:56,203 - execution - INFO - Successfully modified SL (Trailing) for position 3519088498 to 1.15984
+2026-03-04 13:26:08,243 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 142.35 Balance: 140.95
+2026-03-04 13:26:09,518 - execution - INFO - Successfully modified SL (Trailing) for position 3519088498 to 1.15995
+2026-03-04 13:26:42,984 - execution - INFO - Successfully modified SL (Trailing) for position 3519088498 to 1.1601
+2026-03-04 13:29:26,802 - execution - INFO - Successfully modified SL (Trailing) for position 3519088498 to 1.16021
+2026-03-04 13:31:09,147 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 142.64 Balance: 140.95
+2026-03-04 13:31:49,538 - execution - INFO - Successfully modified SL (Trailing) for position 3519088498 to 1.16033
+2026-03-04 13:33:21,082 - execution - INFO - Successfully modified SL (Trailing) for position 3519088498 to 1.16044
+2026-03-04 13:33:36,425 - execution - INFO - Successfully modified SL (Trailing) for position 3519088498 to 1.16054
+2026-03-04 13:33:46,680 - execution - INFO - Successfully modified SL (Trailing) for position 3519088498 to 1.16069
+2026-03-04 13:34:48,163 - execution - INFO - Successfully modified SL (Trailing) for position 3519088498 to 1.16081
+2026-03-04 13:36:09,527 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 143.24 Balance: 140.95
+2026-03-04 13:38:27,330 - execution - INFO - Successfully modified SL (Trailing) for position 3519088498 to 1.16094
+2026-03-04 13:40:50,068 - execution - INFO - Successfully modified SL (Trailing) for position 3519088498 to 1.16105
+2026-03-04 13:41:01,339 - execution - INFO - Successfully modified SL (Trailing) for position 3519088498 to 1.16116
+2026-03-04 13:41:10,366 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 143.65 Balance: 140.95
+2026-03-04 13:46:10,693 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 143.46 Balance: 140.95
+2026-03-04 13:48:45,407 - strategy - INFO - RSI=71.57 > 70. Opening Initial SELL.
+2026-03-04 13:48:45,407 - execution - INFO - Sending Order Request: Type=1, Lot=0.01, Price=1.16142
+2026-03-04 13:48:45,680 - execution - INFO - Order executed successfully! Ticket: 3519141148
+2026-03-04 13:51:11,261 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 142.85 Balance: 143.10
+2026-03-04 13:56:11,484 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 143.04 Balance: 143.10
+2026-03-04 14:01:11,513 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 143.04 Balance: 143.10
+2026-03-04 14:06:12,337 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 142.79 Balance: 143.10
+2026-03-04 14:11:12,451 - MainControl - INFO - --- HEARTBEAT --- Bot is running. Equity: 142.74 Balance: 143.10
