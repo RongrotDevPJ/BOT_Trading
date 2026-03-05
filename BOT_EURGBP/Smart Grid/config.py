@@ -42,7 +42,7 @@ TRAILING_STOP_POINTS = 300 # Distance to trail (5 Pips)
 TRAILING_STEP_POINTS = 50 # Only move SL if profit increases by >= 10 points
 
 # --- Risk Management ---
-MAX_SPREAD_POINTS = 20 # EURGBP generally has tight spreads
+MAX_SPREAD_POINTS = 30 # EURGBP generally has tight spreads, widened to 30 for safety
 MAX_DD_PERCENT = 30.0 # Stop trading if drawdown > 30%
 HEARTBEAT_INTERVAL_SEC = 300 # 5 minutes
 COOLDOWN_MINUTES = 60 # Wait at least 30 min between grid levels (Gold is volatile)
