@@ -69,15 +69,17 @@ class SmartGridStrategy:
         if len(positions) > 0:
             return # Grid is already active, do not open primary entry
 
-        # EMA Trend Filter overrides
-        # Only buy if price > EMA (uptrend) and RSI is oversold
-        if current_rsi < config.RSI_BUY_LEVEL and tick.ask > current_ema:
-            self.logger.info(f"Trend Buy: RSI={current_rsi:.2f} < {config.RSI_BUY_LEVEL} | Price > EMA 200")
+        # Process Buy Grid
+        ema_long_condition = (tick.ask > current_ema) if getattr(config, 'USE_EMA_FILTER', True) else True
+        ema_short_condition = (tick.bid < current_ema) if getattr(config, 'USE_EMA_FILTER', True) else True
+
+        if current_rsi < config.RSI_BUY_LEVEL and ema_long_condition:
+            self.logger.info(f"RSI Buy Logic: RSI={current_rsi:.2f} < {config.RSI_BUY_LEVEL} | EMA Filter={ema_long_condition}")
             executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, config.START_LOT, tick.ask)
             
         # Only sell if price < EMA (downtrend) and RSI is overbought
-        elif current_rsi > config.RSI_SELL_LEVEL and tick.bid < current_ema:
-            self.logger.info(f"Trend Sell: RSI={current_rsi:.2f} > {config.RSI_SELL_LEVEL} | Price < EMA 200")
+        elif current_rsi > config.RSI_SELL_LEVEL and ema_short_condition:
+            self.logger.info(f"RSI Sell Logic: RSI={current_rsi:.2f} > {config.RSI_SELL_LEVEL} | EMA Filter={ema_short_condition}")
             executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, config.START_LOT, tick.bid)
 
     def get_dynamic_grid_distance(self, num_positions, current_atr):
