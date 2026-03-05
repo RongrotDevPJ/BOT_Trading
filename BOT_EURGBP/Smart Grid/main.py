@@ -67,12 +67,15 @@ def main():
                 current_ema = indicator_client.get_ema(config.SYMBOL, config.EMA_TIMEFRAME, config.EMA_PERIOD)
                 
                 # Check Time Filter before allowing NEW initial entries
+                initial_entry_placed = False
                 if time_filter.is_allowed_to_trade():
                     # Check initial entry (if no grid active)
-                    strategy.check_initial_entry(executor, current_rsi, current_ema, tick)
+                    initial_entry_placed = strategy.check_initial_entry(executor, current_rsi, current_ema, tick)
 
-                # Execute grid logic (DCA if needed - we allow DCA even if time filter is active to save account)
-                strategy.check_grid_logic(executor, current_atr)
+                # Execute grid logic ONLY IF we didn't just place an initial entry
+                # (to prevent double orders on the same tick)
+                if not initial_entry_placed:
+                    strategy.check_grid_logic(executor, current_atr)
                 
                 # Manage positions
                 positions = strategy.get_positions()

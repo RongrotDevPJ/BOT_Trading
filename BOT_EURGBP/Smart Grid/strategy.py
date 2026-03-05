@@ -76,11 +76,15 @@ class SmartGridStrategy:
         if current_rsi < config.RSI_BUY_LEVEL and ema_long_condition:
             self.logger.info(f"RSI Buy Logic: RSI={current_rsi:.2f} < {config.RSI_BUY_LEVEL} | EMA Filter={ema_long_condition}")
             executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, config.START_LOT, tick.ask)
+            return True
             
         # Only sell if price < EMA (downtrend) and RSI is overbought
         elif current_rsi > config.RSI_SELL_LEVEL and ema_short_condition:
             self.logger.info(f"RSI Sell Logic: RSI={current_rsi:.2f} > {config.RSI_SELL_LEVEL} | EMA Filter={ema_short_condition}")
             executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, config.START_LOT, tick.bid)
+            return True
+            
+        return False
 
     def get_dynamic_grid_distance(self, num_positions, current_atr):
          """Calculates distance based on Base ATR distance and multiplier."""
