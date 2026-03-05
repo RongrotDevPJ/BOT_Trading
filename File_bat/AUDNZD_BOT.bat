@@ -1,15 +1,15 @@
 @echo off
-title MT5 EURUSD Bot
-color 0A
+title MT5 AUDNZD Bot
+color 0D
 
 echo =========================================
-echo       Smart Grid MT5 Bot (EURUSD)
+echo       Smart Grid MT5 Bot (AUDNZD)
 echo =========================================
 echo.
-echo Starting bot... Please do not close this window.
+echo Starting AUDNZD bot... Please do not close this window.
 echo (Press Ctrl+C to stop the bot)
 echo.
 
-cd /d "%~dp0BOT_EURUSD\Smart Grid"
+cd /d "%~dp0..\BOT_AUDNZD\Smart Grid"
 python main.py
 pause
