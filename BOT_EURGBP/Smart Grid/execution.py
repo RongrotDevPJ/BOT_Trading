@@ -278,6 +278,8 @@ class TradeExecutor:
             self.logger.warning("Off quotes: No current price available.")
         elif code == ag.TRADE_RETCODE_CONNECTION:
              self.logger.error("No connection to broker.")
+        elif code == 10025: # TRADE_RETCODE_NO_CHANGES
+             self.logger.debug(f"Modification ignored (Error 10025): TP/SL is already at requested value for Ticket {request.get('position', 'unknown')}.")
         elif code == 10044: # TRADE_RETCODE_CLOSE_ONLY
              self.logger.error(f"Only position closing is allowed for {request.get('symbol')} (Error 10044). Broker restriction.")
         else:

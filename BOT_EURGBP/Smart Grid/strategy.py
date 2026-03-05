@@ -201,6 +201,8 @@ class SmartGridStrategy:
              
     def _update_tps_if_needed(self, executor, positions, new_tp):
          """Helper to iterate and modify TPs only if they differ significantly."""
+         new_tp = executor.normalize_price(new_tp, config.SYMBOL)
+         
          # Floating point comparison requires small tolerance
          point = ag.symbol_info(config.SYMBOL).point
          tolerance = point / 2.0 
