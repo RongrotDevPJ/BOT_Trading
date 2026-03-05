@@ -39,7 +39,7 @@ TRAILING_STOP_POINTS = 300 # Distance to trail (5 Pips)
 TRAILING_STEP_POINTS = 50 # Only move SL if profit increases by >= 10 points
 
 # --- Risk Management ---
-MAX_SPREAD_POINTS = 60 # Gold has wider spreads
+MAX_SPREAD_POINTS = 5000 # BTC has wider spreads (e.g., 2000-5000 points)
 MAX_DD_PERCENT = 30.0 # Stop trading if drawdown > 30%
 HEARTBEAT_INTERVAL_SEC = 300 # 5 minutes
 COOLDOWN_MINUTES = 60 # Wait at least 30 min between grid levels (Gold is volatile)
