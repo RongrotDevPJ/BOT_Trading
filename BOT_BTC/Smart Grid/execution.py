@@ -14,6 +14,21 @@ class TradeExecutor:
             return round(price, info.digits)
         return price
 
+    def get_filling_mode(self, symbol):
+        """Determines the correct order filling mode supported by the symbol."""
+        info = ag.symbol_info(symbol)
+        if info is None:
+            return ag.ORDER_FILLING_IOC
+            
+        filling = info.filling_mode
+        # 1 = FOK, 2 = IOC
+        if filling & 2:
+            return ag.ORDER_FILLING_IOC
+        elif filling & 1:
+            return ag.ORDER_FILLING_FOK
+        else:
+            return ag.ORDER_FILLING_RETURN
+
     def check_spread(self, symbol):
         """Checks if current spread is within acceptable limits."""
         info = ag.symbol_info(symbol)
@@ -56,7 +71,7 @@ class TradeExecutor:
             "magic": config.MAGIC_NUMBER,
             "comment": "Smart Grid Bot",
             "type_time": ag.ORDER_TIME_GTC,
-            "type_filling": ag.ORDER_FILLING_IOC, # Commonly required by Cent accounts
+            "type_filling": self.get_filling_mode(symbol),
         }
 
         # Send the order
@@ -160,7 +175,7 @@ class TradeExecutor:
              "magic": config.MAGIC_NUMBER,
              "comment": "Bot Partial Close",
              "type_time": ag.ORDER_TIME_GTC,
-             "type_filling": ag.ORDER_FILLING_IOC,
+             "type_filling": self.get_filling_mode(position.symbol),
          }
          
          self.logger.info(f"Closing Position {position.ticket}")
