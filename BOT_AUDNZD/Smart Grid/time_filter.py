@@ -27,17 +27,23 @@ class TimeFilterClient:
         # Check for Friday (weekday() returns 0 for Monday, 4 for Friday)
         if broker_time.weekday() == 4 and not config.ALLOW_FRIDAY_TRADING:
             if broker_time.hour >= config.FRIDAY_STOP_HOUR:
-                # Check if there are any open positions for this symbol
+                # Check if there are any open positions for this bot (using magic number)
                 positions = ag.positions_get(symbol=config.SYMBOL)
-                if positions is not None and len(positions) > 0:
-                    # If there are open positions, we don't log "Trading paused" 
+                bot_positions = []
+                if positions is not None:
+                    bot_positions = [p for p in positions if p.magic == config.MAGIC_NUMBER]
+
+                if len(bot_positions) > 0:
+                    # If there are open positions, we don't log "Fully paused" 
                     # because the bot is still active managing them.
-                    self.paused_logged = False # Reset flag so it can log once orders are closed
+                    if not self.paused_logged:
+                        self.logger.info(f"Time Filter Active: Friday after {config.FRIDAY_STOP_HOUR}:00. New entries paused. Managing {len(bot_positions)} open orders.")
+                        self.paused_logged = True
                     return False
                 
                 # Only log once when fully paused (no orders)
                 if not self.paused_logged:
-                    self.logger.info(f"Time Filter Active: Friday after {config.FRIDAY_STOP_HOUR}:00 broker time. Trading paused.")
+                    self.logger.info(f"Time Filter Active: Friday after {config.FRIDAY_STOP_HOUR}:00. Trading fully paused (No open orders).")
                     self.paused_logged = True
                 return False
 

@@ -4,7 +4,7 @@ MAGIC_NUMBER = 444444 # For AUDNZD
 
 # --- Trading Mode ---
 START_LOT = 0.05 # Base lot size for the first trade
-MAX_DEVIATION = 100 # Allow 100 points slippage for Gold volatility
+MAX_DEVIATION = 100 # Allow slippage
 
 # --- Risk Management & Auto-Lot ---
 AUTO_LOT = True             # Enable dynamic lot sizing based on equity
@@ -20,16 +20,16 @@ MAX_LOT = 0.5 # Maximum lot size allowed
 MAX_POSITIONS = 10 # Max positions to open
 BASKET_TP_DOLLARS = 0.5 # Basket TP in Dollars (0.5 Cent for cent accounts)
 BASKET_TP_POINTS = 100 # Fallback
-MIN_GRID_DISTANCE_POINTS = 300 # Minimum distance for dynamic ATR grid
+MIN_GRID_DISTANCE_POINTS = 150 # Minimum distance for dynamic ATR grid
 
 import MetaTrader5 as ag
 TIMEFRAME = ag.TIMEFRAME_M5
-RSI_TIMEFRAME = ag.TIMEFRAME_M5 # Tuned down to M5 for more signals
+RSI_TIMEFRAME = ag.TIMEFRAME_M5 
 RSI_PERIOD = 14
-RSI_BUY_LEVEL = 25  # Tighter constraint since we moved to 5M
-RSI_SELL_LEVEL = 75 # Tighter constraint since we moved to 5M
+RSI_BUY_LEVEL = 25  
+RSI_SELL_LEVEL = 75 
 
-# Gold Trend Filters
+# AUDNZD Trend Filters
 EMA_PERIOD = 200
 EMA_TIMEFRAME = ag.TIMEFRAME_M15
 ATR_PERIOD = 14
@@ -37,11 +37,11 @@ ATR_MULTIPLIER = 1.5
 
 # --- Advanced Exit Strategy ---
 USE_TRAILING_STOP = False
-TRAILING_STOP_POINTS = 50 # Distance to trail (5 Pips)
-TRAILING_STEP_POINTS = 10 # Only move SL if profit increases by >= 10 points
+TRAILING_STOP_POINTS = 50 
+TRAILING_STEP_POINTS = 10 
 
 # --- Risk Management ---
-MAX_SPREAD_POINTS = 60 # Gold has wider spreads
+MAX_SPREAD_POINTS = 40 
 MAX_DD_PERCENT = 30.0 # Stop trading if drawdown > 30%
 HEARTBEAT_INTERVAL_SEC = 300 # 5 minutes
 COOLDOWN_MINUTES = 20 # Wait at least 20 min between grid levels
