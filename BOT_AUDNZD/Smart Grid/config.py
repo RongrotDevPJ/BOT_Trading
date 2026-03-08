@@ -55,7 +55,28 @@ MIN_POSITIONS_FOR_PARTIAL = 5 # Start looking for Partial Close if holding 5+ po
 ALLOW_FRIDAY_TRADING = False
 FRIDAY_STOP_HOUR = 15 # Broker time to stop trading on Friday (e.g. 15:00)
 
-# MT5 Account Credentials (leave empty if already logged into terminal)
+# MT5 Account Credentials
+# Automatically loads from .env in the root directory if it exists
+# Leave empty in .env to use the terminal already logged in
+import os
+from pathlib import Path
+
 MT5_SERVER = ""
 MT5_LOGIN = 0
 MT5_PASSWORD = ""
+
+env_path = Path(__file__).parent.parent.parent / ".env"
+if env_path.exists():
+    try:
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if "=" in line and not line.startswith("#"):
+                    key, value = line.split("=", 1)
+                    key = key.strip()
+                    value = value.strip().strip("'\"")
+                    if key == "MT5_SERVER": MT5_SERVER = value
+                    elif key == "MT5_LOGIN": MT5_LOGIN = int(value or 0)
+                    elif key == "MT5_PASSWORD": MT5_PASSWORD = value
+    except Exception:
+        pass # Fallback to defaults if .env parsing fails
