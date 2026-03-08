@@ -8,11 +8,12 @@ class MT5Client:
 
     def connect(self):
         """Initializes connection to MT5 terminal."""
-        if not ag.initialize():
+        # Try to initialize
+        if not ag.initialize(login=config.MT5_LOGIN, password=config.MT5_PASSWORD, server=config.MT5_SERVER) if (config.MT5_LOGIN and config.MT5_PASSWORD and config.MT5_SERVER) else not ag.initialize():
             self.logger.error(f"initialize() failed, error code = {ag.last_error()}")
             return False
 
-        # If credentials are provided in config, attempt login
+        # If credentials are provided but initialization was generic, attempt login (double-check)
         if config.MT5_LOGIN and config.MT5_PASSWORD and config.MT5_SERVER:
             authorized = ag.login(
                 login=config.MT5_LOGIN, 
