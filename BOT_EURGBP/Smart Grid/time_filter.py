@@ -1,5 +1,5 @@
 import MetaTrader5 as ag
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import config
 
@@ -7,26 +7,35 @@ class TimeFilterClient:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.paused_logged = False # Flag to prevent log spam
+        
+        # --- Auto-Environment Detection ---
+        # Calculate offset between local time and UTC
+        now = datetime.now()
+        utcnow = datetime.utcnow()
+        offset = now - utcnow
+        
+        self.manual_compensation = timedelta(hours=0)
+        self.env_mode = "System"
+        
+        # If offset is near zero (less than 1 minute), assume it's a UTC VPS
+        if abs(offset.total_seconds()) < 60:
+            self.manual_compensation = timedelta(hours=7) # Compensate for Thai Time (GMT+7)
+            self.env_mode = "VPS-Compensated (+7h)"
+            
+        self.logger.info(f"Time Filter initialized using {self.env_mode} time.")
 
     def is_allowed_to_trade(self):
         """
         Checks if the bot is currently allowed to open new positions
         based on Time Filters (e.g., Friday late afternoon).
+        Uses system/VPS compensated time.
         """
-        # Get current time from broker server using symbol info
-        symbol_info = ag.symbol_info(config.SYMBOL)
-        if symbol_info is None:
-            # If we can't get broker time, err on the side of caution or rely on local loop retries
-            self.logger.warning("Could not retrieve broker time for time filter.")
-            return False
-
-        broker_time_stamp = symbol_info.time
-
-        broker_time = datetime.fromtimestamp(broker_time_stamp)
+        # Calculate effective time (Adjusted for VPS if needed)
+        effective_now = datetime.now() + self.manual_compensation
         
-        # Check for Friday (weekday() returns 0 for Monday, 4 for Friday)
-        if broker_time.weekday() == 4 and not config.ALLOW_FRIDAY_TRADING:
-            if broker_time.hour >= config.FRIDAY_STOP_HOUR:
+        # Check for Friday (6 for Sunday, 0 for Monday, 4 for Friday)
+        if effective_now.weekday() == 4 and not config.ALLOW_FRIDAY_TRADING:
+            if effective_now.hour >= config.FRIDAY_STOP_HOUR:
                 # Check if there are any open positions for this bot (using magic number)
                 positions = ag.positions_get(symbol=config.SYMBOL)
                 bot_positions = []
@@ -35,9 +44,9 @@ class TimeFilterClient:
 
                 if len(bot_positions) > 0:
                     # If there are open positions, we don't log "Fully paused" 
-                    # because the bot is still active managing them.
+                    # because the bot is still active managing them (Salvage mode).
                     if not self.paused_logged:
-                        self.logger.info(f"Time Filter Active: Friday after {config.FRIDAY_STOP_HOUR}:00. New entries paused. Managing {len(bot_positions)} open orders.")
+                        self.logger.info(f"Time Filter Active: Friday after {config.FRIDAY_STOP_HOUR}:00. New entries paused. Managing/Salvaging {len(bot_positions)} open orders.")
                         self.paused_logged = True
                     return False
                 
