@@ -1,10 +1,10 @@
 # --- Bot Configuration ---
 SYMBOL = "AUDNZD"
-MAGIC_NUMBER = 444444 # For AUDNZD
+MAGIC_NUMBER = 444444 # Different from EURUSD
 
 # --- Trading Mode ---
 START_LOT = 0.05 # Base lot size for the first trade
-MAX_DEVIATION = 100 # Allow slippage
+MAX_DEVIATION = 20 # Allow 100 points slippage for Gold volatility
 
 # --- Risk Management & Auto-Lot ---
 AUTO_LOT = True             # Enable dynamic lot sizing based on equity
@@ -13,38 +13,37 @@ MIN_START_LOT = 0.05        # Minimum allowed base lot
 MAX_START_LOT = 0.50        # Maximum allowed base lot
 
 # --- Smart Grid Settings ---
-GRID_DISTANCE_POINTS = 120 # Base distance fallback for AUDNZD
-GRID_MULTIPLIER = 1.1 # Distance multiplier for each sub-level
-LOT_MULTIPLIER = 1.2 # Multiply lot size for each grid level
-MAX_LOT = 0.5 # Maximum lot size allowed
-MAX_POSITIONS = 10 # Max positions to open
-BASKET_TP_DOLLARS = 0.5 # Basket TP in Dollars (0.5 Cent for cent accounts)
-BASKET_TP_POINTS = 100 # Fallback
-MIN_GRID_DISTANCE_POINTS = 150 # Minimum distance for dynamic ATR grid
+GRID_DISTANCE_POINTS = 100 # Base distance fallback
+GRID_MULTIPLIER = 1.2 # Distance multiplier for each sub-level (Moderate for Gold)
+LOT_MULTIPLIER = 1.1 # Multiply lot size cautiously for each grid level
+MAX_LOT = 0.5 # Maximum lot size allowed to protect Cent account
+BASKET_TP_POINTS = 50 # Break-even profit target (25 Pips)
+MIN_GRID_DISTANCE_POINTS = 100 # Minimum distance for dynamic ATR grid
 
+# --- Indicators & Filters Setup ---
 import MetaTrader5 as ag
 TIMEFRAME = ag.TIMEFRAME_M5
-RSI_TIMEFRAME = ag.TIMEFRAME_M5 
 RSI_PERIOD = 14
-RSI_BUY_LEVEL = 25  
-RSI_SELL_LEVEL = 75 
+RSI_BUY_LEVEL = 30  # Trend confirmation (Oversold)
+RSI_SELL_LEVEL = 70 # Trend confirmation (Overbought)
 
-# AUDNZD Trend Filters
+# Gold Trend Filters
 EMA_PERIOD = 200
 EMA_TIMEFRAME = ag.TIMEFRAME_M15
 ATR_PERIOD = 14
 ATR_MULTIPLIER = 1.5
 
 # --- Advanced Exit Strategy ---
-USE_TRAILING_STOP = False
-TRAILING_STOP_POINTS = 50 
-TRAILING_STEP_POINTS = 10 
+USE_TRAILING_STOP = True
+TRAILING_STOP_POINTS = 50 # Distance to trail (5 Pips)
+TRAILING_STEP_POINTS = 10 # Only move SL if profit increases by >= 10 points
 
 # --- Risk Management ---
-MAX_SPREAD_POINTS = 40 
+MAX_SPREAD_POINTS = 15 # Gold has wider spreads
 MAX_DD_PERCENT = 30.0 # Stop trading if drawdown > 30%
+ENABLE_HEDGE_ON_DD = True # Auto hedge to lock port when DD > MAX_DD_PERCENT
 HEARTBEAT_INTERVAL_SEC = 300 # 5 minutes
-COOLDOWN_MINUTES = 20 # Wait at least 20 min between grid levels
+COOLDOWN_MINUTES = 30 # Wait at least 30 min between grid levels (Gold is volatile)
 MAX_GAP_MULTIPLIER = 4.0 # Pause trading if gap exceeds 4x the grid distance (Crash Recovery)
 
 # --- Advanced Portfolio Protections ---
@@ -60,6 +59,10 @@ FRIDAY_STOP_HOUR = 15 # Broker time to stop trading on Friday (e.g. 15:00)
 # Leave empty in .env to use the terminal already logged in
 import os
 from pathlib import Path
+import requests
+
+# --- Line Notify Settings ---
+LINE_NOTIFY_TOKEN = "" # Add your Line Notify Token here
 
 MT5_SERVER = ""
 MT5_LOGIN = 0

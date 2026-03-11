@@ -41,6 +41,7 @@ TRAILING_STEP_POINTS = 10 # Only move SL if profit increases by >= 10 points
 # --- Risk Management ---
 MAX_SPREAD_POINTS = 60 # Gold has wider spreads
 MAX_DD_PERCENT = 30.0 # Stop trading if drawdown > 30%
+ENABLE_HEDGE_ON_DD = True # Auto hedge to lock port when DD > MAX_DD_PERCENT
 HEARTBEAT_INTERVAL_SEC = 300 # 5 minutes
 COOLDOWN_MINUTES = 30 # Wait at least 30 min between grid levels (Gold is volatile)
 MAX_GAP_MULTIPLIER = 4.0 # Pause trading if gap exceeds 4x the grid distance (Crash Recovery)
@@ -58,6 +59,10 @@ FRIDAY_STOP_HOUR = 15 # Broker time to stop trading on Friday (e.g. 15:00)
 # Leave empty in .env to use the terminal already logged in
 import os
 from pathlib import Path
+import requests
+
+# --- Line Notify Settings ---
+LINE_NOTIFY_TOKEN = "" # Add your Line Notify Token here
 
 MT5_SERVER = ""
 MT5_LOGIN = 0

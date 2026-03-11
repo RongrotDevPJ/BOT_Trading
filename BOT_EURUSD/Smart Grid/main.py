@@ -61,16 +61,18 @@ def main():
                     time.sleep(1)
                     continue
 
-                # Fetch RSI for initial entry possibility
+                # Fetch Indicators
                 current_rsi = indicator_client.get_rsi(config.SYMBOL, config.TIMEFRAME, config.RSI_PERIOD)
+                current_atr = indicator_client.get_atr(config.SYMBOL, config.TIMEFRAME, config.ATR_PERIOD)
+                current_ema = indicator_client.get_ema(config.SYMBOL, config.EMA_TIMEFRAME, config.EMA_PERIOD)
                 
                 # Check Time Filter before allowing NEW initial entries
                 if time_filter.is_allowed_to_trade():
                     # Check initial entry (if no grid active)
-                    strategy.check_initial_entry(executor, current_rsi, tick)
+                    strategy.check_initial_entry(executor, current_rsi, current_ema, tick)
 
                 # Execute grid logic (DCA if needed - we allow DCA even if time filter is active to save account)
-                strategy.check_grid_logic(executor)
+                strategy.check_grid_logic(executor, current_atr, current_ema)
                 
                 # Manage positions
                 positions = strategy.get_positions()

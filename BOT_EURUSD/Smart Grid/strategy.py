@@ -1,13 +1,28 @@
 import logging
 import MetaTrader5 as ag
 import config
+import requests
 
 class SmartGridStrategy:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+        self.hedged_this_session = False # Prevent multiple hedges in the same run
 
-    def is_max_drawdown_reached(self):
-         """Checks if current account drawdown exceeds the max limit."""
+    def send_line_notify(self, message):
+         """Sends an alert message to Line Notify."""
+         if not getattr(config, 'LINE_NOTIFY_TOKEN', ""):
+             return
+         
+         url = "https://notify-api.line.me/api/notify"
+         headers = {"Authorization": f"Bearer {config.LINE_NOTIFY_TOKEN}"}
+         data = {"message": f"[{config.SYMBOL}] {message}"}
+         try:
+             requests.post(url, headers=headers, data=data, timeout=5)
+         except Exception as e:
+             self.logger.error(f"Failed to send Line Notify: {e}")
+
+    def is_max_drawdown_reached(self, executor, tick):
+         """Checks if current account drawdown exceeds the max limit and performs Hedging if enabled."""
          account = ag.account_info()
          if account is None:
              self.logger.error("Failed to retrieve account info to check DD.")
@@ -19,10 +34,59 @@ class SmartGridStrategy:
          if balance > 0:
              drawdown_percent = ((balance - equity) / balance) * 100
              if drawdown_percent > config.MAX_DD_PERCENT:
-                 self.logger.critical(f"MAX DRAWDOWN REACHED! DD={drawdown_percent:.2f}%. Bot is pausing operations.")
+                 if not self.hedged_this_session:
+                     self.logger.critical(f"MAX DRAWDOWN REACHED! DD={drawdown_percent:.2f}%.")
+                     
+                     if getattr(config, 'ENABLE_HEDGE_ON_DD', False) and executor and tick:
+                         self.execute_hedge(executor, tick)
+                     else:
+                         self.logger.critical("Bot is pausing operations without hedging.")
+                         self.send_line_notify(f"⚠️ DANGER: MAX DD REACHED ({drawdown_percent:.2f}%). Bot paused.")
+                     
+                     self.hedged_this_session = True # Only trigger once per session to prevent spamming
                  return True
                  
+         # Reset hedge flag if drawdown recovers (optional, but safer to require manual restart once hedged)
          return False
+
+    def execute_hedge(self, executor, tick):
+         """Calculates net lots and opens a hedge position to lock the account."""
+         positions = self.get_positions()
+         if not positions:
+             return
+             
+         buy_lots = sum(p.volume for p in positions if p.type == 0)
+         sell_lots = sum(p.volume for p in positions if p.type == 1)
+         
+         # Round to handle floating point precision
+         buy_lots = round(buy_lots, 2)
+         sell_lots = round(sell_lots, 2)
+         
+         net_lots = buy_lots - sell_lots
+         
+         if net_lots == 0:
+             self.logger.info("Port is already fully hedged (Buy Lots = Sell Lots).")
+             self.send_line_notify("🔒 Port is already fully hedged. Bot paused.")
+             return
+             
+         self.logger.warning(f"Preparing to Hedge. Buy Lots: {buy_lots}, Sell Lots: {sell_lots}, Net: {net_lots}")
+         
+         # If Net > 0 (More Buys), we need to SELL
+         if net_lots > 0:
+             hedge_type = ag.ORDER_TYPE_SELL
+             hedge_price = tick.bid
+             hedge_volume = net_lots
+         # If Net < 0 (More Sells), we need to BUY
+         else:
+             hedge_type = ag.ORDER_TYPE_BUY
+             hedge_price = tick.ask
+             hedge_volume = abs(net_lots)
+             
+         self.logger.critical(f"Executing HEDGE Order: Type={hedge_type}, Volume={hedge_volume}")
+         self.send_line_notify(f"🛡️ HEDGE TRIGGERED! Lock Port. Opening {'BUY' if hedge_type == 0 else 'SELL'} {hedge_volume} Lots.")
+         
+         # Send Hedge Order directly to executor without normal validations
+         executor.send_order(config.SYMBOL, hedge_type, hedge_volume, hedge_price)
 
     def get_positions(self):
          """Gets all open positions managed by this bot."""
@@ -60,32 +124,42 @@ class SmartGridStrategy:
              
         return basket_tp
 
-    def check_initial_entry(self, executor, current_rsi, tick):
-        """Checks RSI to determine if a first trade should be opened."""
-        if current_rsi is None or tick is None:
+    def check_initial_entry(self, executor, current_rsi, current_ema, tick):
+        """Checks RSI and EMA to determine if a first trade should be opened."""
+        if current_rsi is None or tick is None or current_ema is None:
             return
 
         positions = self.get_positions()
         if len(positions) > 0:
             return # Grid is already active, do not open primary entry
 
-        if current_rsi < config.RSI_BUY_LEVEL:
-            self.logger.info(f"RSI={current_rsi:.2f} < {config.RSI_BUY_LEVEL}. Opening Initial BUY.")
+        # EMA Trend Filter overrides
+        # Only buy if price > EMA (uptrend) and RSI is oversold
+        if current_rsi < config.RSI_BUY_LEVEL and tick.ask > current_ema:
+            self.logger.info(f"Trend Buy: RSI={current_rsi:.2f} < {config.RSI_BUY_LEVEL} | Price > EMA 200")
             executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, config.START_LOT, tick.ask)
             
-        elif current_rsi > config.RSI_SELL_LEVEL:
-            self.logger.info(f"RSI={current_rsi:.2f} > {config.RSI_SELL_LEVEL}. Opening Initial SELL.")
+        # Only sell if price < EMA (downtrend) and RSI is overbought
+        elif current_rsi > config.RSI_SELL_LEVEL and tick.bid < current_ema:
+            self.logger.info(f"Trend Sell: RSI={current_rsi:.2f} > {config.RSI_SELL_LEVEL} | Price < EMA 200")
             executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, config.START_LOT, tick.bid)
 
-    def get_dynamic_grid_distance(self, num_positions):
-         """Calculates distance based on base distance and multiplier."""
+    def get_dynamic_grid_distance(self, num_positions, current_atr):
+         """Calculates distance based on Base ATR distance and multiplier."""
+         # Base distance is calculated from ATR, with a minimum safety floor
+         base_distance = config.MIN_GRID_DISTANCE_POINTS
+         if current_atr is not None:
+             point = ag.symbol_info(config.SYMBOL).point
+             atr_points_distance = (current_atr * config.ATR_MULTIPLIER) / point
+             base_distance = max(config.MIN_GRID_DISTANCE_POINTS, atr_points_distance)
+             
          # For 1st position (0 existing), distance is base. 2nd uses base * multiplier^1, etc.
          if num_positions <= 1:
-             return config.GRID_DISTANCE_POINTS
+             return base_distance
          
-         # e.g. level 2 = base * 1.2, level 3 = base * 1.44
+         # e.g. level 2 = base * 1.5, level 3 = base * 2.25
          multiplier = config.GRID_MULTIPLIER ** (num_positions - 1)
-         return config.GRID_DISTANCE_POINTS * multiplier
+         return base_distance * multiplier
 
     def get_dynamic_lot(self, num_positions):
          """Calculates lot size based on equity and multiplier."""
@@ -107,12 +181,12 @@ class SmartGridStrategy:
              
          return lot
 
-    def needs_new_grid_level(self, positions, current_price, side):
+    def needs_new_grid_level(self, positions, current_price, side, current_atr, current_ema):
         """
         Determines if price has moved far enough to open a new grid level.
         Positions should be sorted by time (oldest first or newest first) to find the LAST opened level.
         """
-        if not positions:
+        if not positions or current_ema is None:
            return False
 
         # Find the most recently opened position in this direction
@@ -129,7 +203,7 @@ class SmartGridStrategy:
         point = ag.symbol_info(config.SYMBOL).point
         distance_points = abs(current_price - latest_position.price_open) / point
         
-        required_distance = self.get_dynamic_grid_distance(len(positions))
+        required_distance = self.get_dynamic_grid_distance(len(positions), current_atr)
 
         # Crash Recovery / Max Gap check
         max_allowed_distance = required_distance * config.MAX_GAP_MULTIPLIER
@@ -138,36 +212,42 @@ class SmartGridStrategy:
              return False
 
         if distance_points >= required_distance:
-            # Check direction of movement relative to side
+            # Check direction of movement relative to side AND APPLY TREND FILTER (EMA 200)
             if side == 0 and current_price < latest_position.price_open:
-                # Price dropped below last buy order, open new buy
-                return True
+                # Price dropped below last buy order. Check if we are still above EMA (Uptrend)
+                if current_price > current_ema:
+                    return True
+                else:
+                    self.logger.info(f"Trend Filter: Blocked Buy Grid because Price ({current_price}) is below EMA ({current_ema:.5f})")
             elif side == 1 and current_price > latest_position.price_open:
-                # Price rose above last sell order, open new sell
-                return True
+                # Price rose above last sell order. Check if we are still below EMA (Downtrend)
+                if current_price < current_ema:
+                    return True
+                else:
+                    self.logger.info(f"Trend Filter: Blocked Sell Grid because Price ({current_price}) is above EMA ({current_ema:.5f})")
                 
         return False
         
-    def check_grid_logic(self, executor):
+    def check_grid_logic(self, executor, current_atr, current_ema):
         """Core logic to check positions and open new grid levels."""
         
-        if self.is_max_drawdown_reached():
-             return # Skip processing
+        tick = ag.symbol_info_tick(config.SYMBOL)
+        if tick is None:
+            return # Probably weekend/market closed
+            
+        if self.is_max_drawdown_reached(executor, tick):
+             return # Skip processing if max DD hit (Hedging is handled inside)
 
         positions = self.get_positions()
         buy_positions = [p for p in positions if p.type == 0]
         sell_positions = [p for p in positions if p.type == 1]
         
-        tick = ag.symbol_info_tick(config.SYMBOL)
-        if tick is None:
-            return # Probably weekend/market closed
-
         current_ask = tick.ask
         current_bid = tick.bid
 
         # Process Buy Grid
         if buy_positions:
-            if self.needs_new_grid_level(buy_positions, current_ask, side=0):
+            if self.needs_new_grid_level(buy_positions, current_ask, side=0, current_atr=current_atr, current_ema=current_ema):
                 dynamic_lot = self.get_dynamic_lot(len(buy_positions))
                 self.logger.info(f"Opening BUY Grid. Level: {len(buy_positions)+1}, Lot: {dynamic_lot}")
                 executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, dynamic_lot, current_ask)
@@ -178,7 +258,7 @@ class SmartGridStrategy:
 
         # Process Sell Grid
         if sell_positions:
-             if self.needs_new_grid_level(sell_positions, current_bid, side=1):
+             if self.needs_new_grid_level(sell_positions, current_bid, side=1, current_atr=current_atr, current_ema=current_ema):
                  dynamic_lot = self.get_dynamic_lot(len(sell_positions))
                  self.logger.info(f"Opening SELL Grid. Level: {len(sell_positions)+1}, Lot: {dynamic_lot}")
                  executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, dynamic_lot, current_bid)

@@ -72,7 +72,7 @@ def main():
                     strategy.check_initial_entry(executor, current_rsi, current_ema, tick)
 
                 # Execute grid logic (DCA if needed - we allow DCA even if time filter is active to save account)
-                strategy.check_grid_logic(executor, current_atr)
+                strategy.check_grid_logic(executor, current_atr, current_ema)
                 
                 # Manage positions
                 positions = strategy.get_positions()
