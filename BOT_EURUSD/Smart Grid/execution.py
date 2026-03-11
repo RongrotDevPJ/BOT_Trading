@@ -14,6 +14,21 @@ class TradeExecutor:
             return round(price, info.digits)
         return price
 
+    def get_filling_mode(self, symbol):
+        """Determines the correct order filling mode supported by the symbol."""
+        info = ag.symbol_info(symbol)
+        if info is None:
+            return ag.ORDER_FILLING_IOC
+            
+        filling = info.filling_mode
+        # 1 = FOK, 2 = IOC
+        if filling & 2:
+            return ag.ORDER_FILLING_IOC
+        elif filling & 1:
+            return ag.ORDER_FILLING_FOK
+        else:
+            return ag.ORDER_FILLING_RETURN
+
     def check_spread(self, symbol):
         """Checks if current spread is within acceptable limits."""
         info = ag.symbol_info(symbol)
@@ -27,11 +42,32 @@ class TradeExecutor:
             return False
         return True
 
+    def check_trade_allowed(self, symbol):
+        """Checks if trading is fully enabled for the symbol."""
+        info = ag.symbol_info(symbol)
+        if info is None:
+            self.logger.warning(f"Failed to get symbol info for {symbol}")
+            return False
+            
+        trade_mode = info.trade_mode
+        if trade_mode == ag.SYMBOL_TRADE_MODE_DISABLED:
+            self.logger.warning(f"Trade is DISABLED for {symbol}.")
+            return False
+        elif trade_mode == ag.SYMBOL_TRADE_MODE_CLOSEONLY:
+            self.logger.warning(f"Trade is CLOSE_ONLY for {symbol}. Cannot open new positions.")
+            return False
+            
+        return True
+
     def send_order(self, symbol, order_type, lot, price, sl=0.0, tp=0.0):
         """Sends a market order and handles common errors."""
         
         # Verify spread before sending order
         if not self.check_spread(symbol):
+            return None
+
+        # Verify trade is allowed
+        if not self.check_trade_allowed(symbol):
             return None
 
         # Normalize prices
@@ -52,11 +88,11 @@ class TradeExecutor:
             "price": price,
             "sl": sl,
             "tp": tp,
-            "deviation": 20,
+            "deviation": config.MAX_DEVIATION,
             "magic": config.MAGIC_NUMBER,
             "comment": "Smart Grid Bot",
             "type_time": ag.ORDER_TIME_GTC,
-            "type_filling": ag.ORDER_FILLING_IOC, # Commonly required by Cent accounts
+            "type_filling": self.get_filling_mode(symbol),
         }
 
         # Send the order
@@ -156,11 +192,11 @@ class TradeExecutor:
              "type": order_type,
              "position": position.ticket, # Specific ticket to close
              "price": price,
-             "deviation": 20,
+             "deviation": config.MAX_DEVIATION,
              "magic": config.MAGIC_NUMBER,
              "comment": "Bot Partial Close",
              "type_time": ag.ORDER_TIME_GTC,
-             "type_filling": ag.ORDER_FILLING_IOC,
+             "type_filling": self.get_filling_mode(position.symbol),
          }
          
          self.logger.info(f"Closing Position {position.ticket}")
@@ -242,6 +278,10 @@ class TradeExecutor:
             self.logger.warning("Off quotes: No current price available.")
         elif code == ag.TRADE_RETCODE_CONNECTION:
              self.logger.error("No connection to broker.")
+        elif code == 10025: # TRADE_RETCODE_NO_CHANGES
+             self.logger.debug(f"Modification ignored (Error 10025): TP/SL is already at requested value for Ticket {request.get('position', 'unknown')}.")
+        elif code == 10044: # TRADE_RETCODE_CLOSE_ONLY
+             self.logger.error(f"Only position closing is allowed for {request.get('symbol')} (Error 10044). Broker restriction.")
         else:
              self.logger.error(f"Trade failed with unknown error code: {code}. Result: {result}")
         

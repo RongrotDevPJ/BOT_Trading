@@ -1,25 +1,11 @@
 import logging
 import MetaTrader5 as ag
 import config
-import requests
 
 class SmartGridStrategy:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.hedged_this_session = False # Prevent multiple hedges in the same run
-
-    def send_line_notify(self, message):
-         """Sends an alert message to Line Notify."""
-         if not getattr(config, 'LINE_NOTIFY_TOKEN', ""):
-             return
-         
-         url = "https://notify-api.line.me/api/notify"
-         headers = {"Authorization": f"Bearer {config.LINE_NOTIFY_TOKEN}"}
-         data = {"message": f"[{config.SYMBOL}] {message}"}
-         try:
-             requests.post(url, headers=headers, data=data, timeout=5)
-         except Exception as e:
-             self.logger.error(f"Failed to send Line Notify: {e}")
 
     def is_max_drawdown_reached(self, executor, tick):
          """Checks if current account drawdown exceeds the max limit and performs Hedging if enabled."""
@@ -41,7 +27,6 @@ class SmartGridStrategy:
                          self.execute_hedge(executor, tick)
                      else:
                          self.logger.critical("Bot is pausing operations without hedging.")
-                         self.send_line_notify(f"⚠️ DANGER: MAX DD REACHED ({drawdown_percent:.2f}%). Bot paused.")
                      
                      self.hedged_this_session = True # Only trigger once per session to prevent spamming
                  return True
@@ -66,7 +51,6 @@ class SmartGridStrategy:
          
          if net_lots == 0:
              self.logger.info("Port is already fully hedged (Buy Lots = Sell Lots).")
-             self.send_line_notify("🔒 Port is already fully hedged. Bot paused.")
              return
              
          self.logger.warning(f"Preparing to Hedge. Buy Lots: {buy_lots}, Sell Lots: {sell_lots}, Net: {net_lots}")
@@ -83,7 +67,6 @@ class SmartGridStrategy:
              hedge_volume = abs(net_lots)
              
          self.logger.critical(f"Executing HEDGE Order: Type={hedge_type}, Volume={hedge_volume}")
-         self.send_line_notify(f"🛡️ HEDGE TRIGGERED! Lock Port. Opening {'BUY' if hedge_type == 0 else 'SELL'} {hedge_volume} Lots.")
          
          # Send Hedge Order directly to executor without normal validations
          executor.send_order(config.SYMBOL, hedge_type, hedge_volume, hedge_price)

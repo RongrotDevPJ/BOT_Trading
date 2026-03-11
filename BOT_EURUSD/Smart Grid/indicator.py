@@ -69,3 +69,73 @@ class IndicatorClient:
         rsi_value = self._calculate_rsi(close_prices, period)
         
         return rsi_value
+        
+    def _calculate_atr(self, rates, period):
+        """
+        Calculates the Average True Range (ATR) purely using built-in Python.
+        """
+        if len(rates) < period + 1:
+             return None
+             
+        true_ranges = []
+        # Calculate True Range for each candle
+        for i in range(1, len(rates)):
+            high = rates[i]['high']
+            low = rates[i]['low']
+            prev_close = rates[i-1]['close']
+            
+            tr1 = high - low
+            tr2 = abs(high - prev_close)
+            tr3 = abs(low - prev_close)
+            
+            true_range = max(tr1, tr2, tr3)
+            true_ranges.append(true_range)
+            
+        # Initial ATR is simple moving average of first 'period' TRs
+        atr = sum(true_ranges[:period]) / period
+        
+        # Smoothed ATR for subsequent values (Wilder's smoothing)
+        for i in range(period, len(true_ranges)):
+             atr = ((atr * (period - 1)) + true_ranges[i]) / period
+             
+        return atr
+        
+    def get_atr(self, symbol, timeframe, period):
+        """ Fetches recent candles and calculates current ATR. """
+        num_candles = period * 3
+        rates = ag.copy_rates_from_pos(symbol, timeframe, 0, num_candles)
+        
+        if rates is None or len(rates) < num_candles:
+            self.logger.warning(f"Could not fetch enough rates to calculate ATR for {symbol}.")
+            return None
+            
+        return self._calculate_atr(rates, period)
+        
+    def _calculate_ema(self, prices, period):
+        """ Calculates Exponential Moving Average (EMA). """
+        if len(prices) < period:
+             return None
+             
+        # Initial EMA is the Simple Moving Average of the first 'period' prices
+        ema = sum(prices[:period]) / period
+        
+        # Multiplier
+        multiplier = 2 / (period + 1)
+        
+        # Apply EMA formula to the rest of the prices
+        for i in range(period, len(prices)):
+             ema = (prices[i] - ema) * multiplier + ema
+             
+        return ema
+        
+    def get_ema(self, symbol, timeframe, period):
+        """ Fetches data and calculates EMA. """
+        num_candles = period * 2 # Need enough historical data to stabilize EMA
+        rates = ag.copy_rates_from_pos(symbol, timeframe, 0, num_candles)
+        
+        if rates is None or len(rates) < num_candles:
+            self.logger.warning(f"Could not fetch enough rates to calculate EMA for {symbol}.")
+            return None
+            
+        close_prices = [float(rate['close']) for rate in rates]
+        return self._calculate_ema(close_prices, period)
