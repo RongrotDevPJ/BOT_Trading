@@ -116,15 +116,26 @@ class SmartGridStrategy:
         if len(positions) > 0:
             return # Grid is already active, do not open primary entry
 
-        # EMA Trend Filter overrides
-        # Only buy if price > EMA (uptrend) and RSI is oversold
-        if current_rsi < config.RSI_BUY_LEVEL and tick.ask > current_ema:
-            self.logger.info(f"Trend Buy: RSI={current_rsi:.2f} < {config.RSI_BUY_LEVEL} | Price > EMA 200")
+        # Check Trend Filter if enabled, otherwise assume trend matches
+        enable_trend = getattr(config, 'ENABLE_TREND_FILTER', True)
+        
+        is_trend_buy = True
+        is_trend_sell = True
+        if enable_trend:
+            is_trend_buy = tick.ask > current_ema
+            is_trend_sell = tick.bid < current_ema
+            
+        is_rsi_buy = current_rsi <= config.RSI_BUY_LEVEL
+        is_rsi_sell = current_rsi >= config.RSI_SELL_LEVEL
+
+        if is_rsi_buy and is_trend_buy:
+            trend_str = f"| Price > EMA 200 " if enable_trend else "(Trend Filter OFF)"
+            self.logger.info(f"Grid Buy Entry: RSI={current_rsi:.2f} <= {config.RSI_BUY_LEVEL} {trend_str}")
             executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, config.START_LOT, tick.ask)
             
-        # Only sell if price < EMA (downtrend) and RSI is overbought
-        elif current_rsi > config.RSI_SELL_LEVEL and tick.bid < current_ema:
-            self.logger.info(f"Trend Sell: RSI={current_rsi:.2f} > {config.RSI_SELL_LEVEL} | Price < EMA 200")
+        elif is_rsi_sell and is_trend_sell:
+            trend_str = f"| Price < EMA 200 " if enable_trend else "(Trend Filter OFF)"
+            self.logger.info(f"Grid Sell Entry: RSI={current_rsi:.2f} >= {config.RSI_SELL_LEVEL} {trend_str}")
             executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, config.START_LOT, tick.bid)
 
     def get_dynamic_grid_distance(self, num_positions, current_atr):
@@ -195,16 +206,18 @@ class SmartGridStrategy:
              return False
 
         if distance_points >= required_distance:
-            # Check direction of movement relative to side AND APPLY TREND FILTER (EMA 200)
+            enable_trend = getattr(config, 'ENABLE_TREND_FILTER', True)
+            
+            # Check direction of movement relative to side AND APPLY TREND FILTER (EMA 200) if enabled
             if side == 0 and current_price < latest_position.price_open:
-                # Price dropped below last buy order. Check if we are still above EMA (Uptrend)
-                if current_price > current_ema:
+                # Price dropped below last buy order. Check if we are still above EMA (Uptrend) or if filter is disabled
+                if not enable_trend or current_price > current_ema:
                     return True
                 else:
                     self.logger.info(f"Trend Filter: Blocked Buy Grid because Price ({current_price}) is below EMA ({current_ema:.5f})")
             elif side == 1 and current_price > latest_position.price_open:
-                # Price rose above last sell order. Check if we are still below EMA (Downtrend)
-                if current_price < current_ema:
+                # Price rose above last sell order. Check if we are still below EMA (Downtrend) or if filter is disabled
+                if not enable_trend or current_price < current_ema:
                     return True
                 else:
                     self.logger.info(f"Trend Filter: Blocked Sell Grid because Price ({current_price}) is above EMA ({current_ema:.5f})")

@@ -24,10 +24,11 @@ MIN_GRID_DISTANCE_POINTS = 100 # Minimum distance for dynamic ATR grid
 import MetaTrader5 as ag
 TIMEFRAME = ag.TIMEFRAME_M5
 RSI_PERIOD = 14
-RSI_BUY_LEVEL = 30  # Trend confirmation (Oversold)
-RSI_SELL_LEVEL = 70 # Trend confirmation (Overbought)
+RSI_BUY_LEVEL = 35  # Trend confirmation (Oversold)
+RSI_SELL_LEVEL = 65 # Trend confirmation (Overbought)
 
-# Gold Trend Filters
+# Trend Filters
+ENABLE_TREND_FILTER = True # Keep enabled for trending pairs
 EMA_PERIOD = 200
 EMA_TIMEFRAME = ag.TIMEFRAME_M15
 ATR_PERIOD = 14
@@ -43,7 +44,7 @@ MAX_SPREAD_POINTS = 15 # Gold has wider spreads
 MAX_DD_PERCENT = 30.0 # Stop trading if drawdown > 30%
 ENABLE_HEDGE_ON_DD = True # Auto hedge to lock port when DD > MAX_DD_PERCENT
 HEARTBEAT_INTERVAL_SEC = 300 # 5 minutes
-COOLDOWN_MINUTES = 30 # Wait at least 30 min between grid levels (Gold is volatile)
+COOLDOWN_MINUTES = 15 # Wait at least 15 min between grid levels
 MAX_GAP_MULTIPLIER = 4.0 # Pause trading if gap exceeds 4x the grid distance (Crash Recovery)
 
 # --- Advanced Portfolio Protections ---
