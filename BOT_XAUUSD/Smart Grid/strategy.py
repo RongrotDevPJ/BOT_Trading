@@ -152,11 +152,14 @@ class SmartGridStrategy:
          # Orders 5-7 (num_positions 4-6): Base distance * 1.5
          # Orders 8-10+ (num_positions >= 7): Base distance * 2.0
          if num_positions < 4:
-             return base_distance
+             multiplier = 1.0
          elif num_positions < 7:
-             return base_distance * 1.5
+             multiplier = 1.5
          else:
-             return base_distance * 2.0
+             multiplier = 2.0
+             
+         self.logger.info(f"[System Check] Dynamic Distance Active: Layer {num_positions + 1}, Multiplier {multiplier}x")
+         return base_distance * multiplier
 
     def get_dynamic_lot(self, num_positions):
          """Calculates lot size based on equity and multiplier."""
