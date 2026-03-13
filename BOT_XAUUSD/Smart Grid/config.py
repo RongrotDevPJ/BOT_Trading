@@ -61,8 +61,6 @@ FRIDAY_STOP_HOUR = 15 # Broker time to stop trading on Friday (e.g. 15:00)
 # Leave empty in .env to use the terminal already logged in
 import os
 from pathlib import Path
-# --- Line Notify Settings ---
-LINE_NOTIFY_TOKEN = "" # Add your Line Notify Token here
 
 MT5_SERVER = ""
 MT5_LOGIN = 0
