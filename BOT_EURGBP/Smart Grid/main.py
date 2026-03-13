@@ -3,7 +3,6 @@ import time
 import logging
 from logging.handlers import TimedRotatingFileHandler
 import datetime
-import requests
 from mt5_client import MT5Client
 from execution import TradeExecutor
 from strategy import SmartGridStrategy
