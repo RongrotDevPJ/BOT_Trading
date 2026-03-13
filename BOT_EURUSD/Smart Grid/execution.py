@@ -37,8 +37,8 @@ class TradeExecutor:
             return False
             
         spread = info.spread
-        if spread > config.MAX_SPREAD_POINTS:
-            self.logger.warning(f"Spread {spread} exceeds max limit {config.MAX_SPREAD_POINTS}. Trade blocked.")
+        if spread > config.MAX_ALLOWED_SPREAD:
+            self.logger.warning(f"Spread {spread} exceeds max limit {config.MAX_ALLOWED_SPREAD}. Trade blocked.")
             return False
         return True
 
@@ -233,6 +233,35 @@ class TradeExecutor:
                        
                        # We stop checking to avoid modifying lists while closing
                        return
+
+    def ghost_close_check(self, positions, tick, strategy_instance):
+         """
+         Ghost Take Profit: Real-time monitoring of floating profit vs Basket TP.
+         Closes positions instantly if price crosses the TP to avoid slippage.
+         """
+         if not positions or tick is None:
+             return
+
+         buy_pos = [p for p in positions if p.type == 0]
+         sell_pos = [p for p in positions if p.type == 1]
+
+         for side_positions, side in [(buy_pos, 0), (sell_pos, 1)]:
+             if not side_positions:
+                 continue
+
+             basket_tp_price = strategy_instance.calculate_basket_tp(side_positions, side)
+             if basket_tp_price == 0.0:
+                 continue
+
+             # Check Ghost TP
+             if side == 0 and tick.bid >= basket_tp_price:
+                 self.logger.critical(f"👻 GHOST TP TRIGGERED (BUY)! Bid {tick.bid:.5f} >= Target {basket_tp_price:.5f}. Securing profits!")
+                 for p in side_positions:
+                     self.close_position(p, tick)
+             elif side == 1 and tick.ask <= basket_tp_price:
+                 self.logger.critical(f"👻 GHOST TP TRIGGERED (SELL)! Ask {tick.ask:.5f} <= Target {basket_tp_price:.5f}. Securing profits!")
+                 for p in side_positions:
+                     self.close_position(p, tick)
 
     def _handle_retcode(self, result, request):
         """Processes MetaTrader 5 return codes with descriptive logging."""

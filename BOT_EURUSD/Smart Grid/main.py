@@ -1,5 +1,8 @@
 import time
 import logging
+from logging.handlers import TimedRotatingFileHandler
+import datetime
+import requests
 from mt5_client import MT5Client
 from execution import TradeExecutor
 from strategy import SmartGridStrategy
@@ -12,11 +15,23 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("smart_grid_bot.log"),
+        TimedRotatingFileHandler("smart_grid_bot.log", when="midnight", interval=1, backupCount=7),
         logging.StreamHandler()
     ]
 )
 logger = logging.getLogger("MainControl")
+
+def send_line_notify(message):
+    token = getattr(config, 'LINE_NOTIFY_TOKEN', '')
+    if not token:
+        return
+    url = "https://notify-api.line.me/api/notify"
+    headers = {"Authorization": f"Bearer {token}"}
+    data = {"message": message}
+    try:
+        requests.post(url, headers=headers, data=data, timeout=5)
+    except Exception as e:
+        logger.error(f"Failed to send Line Notify: {e}")
 
 def main():
     logger.info("Starting Smart Grid MT5 Bot...")
@@ -33,6 +48,10 @@ def main():
         return
 
     last_heartbeat = time.time()
+    
+    last_reset_day = None
+    start_of_day_equity = None
+    daily_target_reached = False
 
     try:
         while True:
@@ -61,6 +80,43 @@ def main():
                     time.sleep(1)
                     continue
 
+                # --- Daily Equity Target Logic ---
+                current_server_time = datetime.datetime.fromtimestamp(tick.time) if tick else datetime.datetime.now()
+                # We consider "trading day" to start at 05:00 server time.
+                trading_day = current_server_time.date() if current_server_time.hour >= 5 else current_server_time.date() - datetime.timedelta(days=1)
+                
+                if last_reset_day != trading_day:
+                    account_info = client.get_account_info()
+                    if account_info:
+                        start_of_day_equity = account_info.equity
+                        last_reset_day = trading_day
+                        daily_target_reached = False
+                        logger.info(f"--- DAILY RESET --- New trading day started. Starting Equity: {start_of_day_equity:.2f}")
+
+                # Check Daily Target
+                if not daily_target_reached and start_of_day_equity is not None:
+                    account_info = client.get_account_info()
+                    if account_info:
+                        current_equity = account_info.equity
+                        target_equity = start_of_day_equity * (1 + getattr(config, 'DAILY_TARGET_PERCENT', 15.0) / 100.0)
+                        
+                        if current_equity >= target_equity:
+                            logger.critical(f"🎉 DAILY TARGET REACHED! Equity {current_equity:.2f} >= {target_equity:.2f} (15% Lock)")
+                            send_line_notify(f"🎉 [{config.SYMBOL}] เป้าหมาย 15% สำเร็จแล้ว!\nEquity เริ่มต้น: {start_of_day_equity:.2f}\nEquity ปัจจุบัน: {current_equity:.2f}")
+                            
+                            # Close all positions
+                            positions = strategy.get_positions()
+                            for p in positions:
+                                executor.close_position(p, tick)
+                                
+                            daily_target_reached = True
+                            
+                if daily_target_reached:
+                    # Bot pauses operations until the next trading day
+                    time.sleep(60)
+                    continue
+                # -------------------------------
+
                 # Fetch Indicators
                 current_rsi = indicator_client.get_rsi(config.SYMBOL, config.TIMEFRAME, config.RSI_PERIOD)
                 current_atr = indicator_client.get_atr(config.SYMBOL, config.TIMEFRAME, config.ATR_PERIOD)
@@ -76,6 +132,9 @@ def main():
                 
                 # Manage positions
                 positions = strategy.get_positions()
+                
+                # 0. Ghost Close Check (Check if price hits Basket TP to avoid slippage)
+                executor.ghost_close_check(positions, tick, strategy)
                 
                 # 1. Partial Close (Hedging bad trades with good ones)
                 executor.manage_partial_close(positions, tick)

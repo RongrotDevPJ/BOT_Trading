@@ -139,7 +139,7 @@ class SmartGridStrategy:
             executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, config.START_LOT, tick.bid)
 
     def get_dynamic_grid_distance(self, num_positions, current_atr):
-         """Calculates distance based on Base ATR distance and multiplier."""
+         """Calculates distance based on Base ATR distance and smart step dynamic multipliers."""
          # Base distance is calculated from ATR, with a minimum safety floor
          base_distance = config.MIN_GRID_DISTANCE_POINTS
          if current_atr is not None:
@@ -147,13 +147,16 @@ class SmartGridStrategy:
              atr_points_distance = (current_atr * config.ATR_MULTIPLIER) / point
              base_distance = max(config.MIN_GRID_DISTANCE_POINTS, atr_points_distance)
              
-         # For 1st position (0 existing), distance is base. 2nd uses base * multiplier^1, etc.
-         if num_positions <= 1:
+         # Smart Dynamic Grid Distance Logic
+         # Orders 1-4 (num_positions 0-3): Base distance
+         # Orders 5-7 (num_positions 4-6): Base distance * 1.5
+         # Orders 8-10+ (num_positions >= 7): Base distance * 2.0
+         if num_positions < 4:
              return base_distance
-         
-         # e.g. level 2 = base * 1.5, level 3 = base * 2.25
-         multiplier = config.GRID_MULTIPLIER ** (num_positions - 1)
-         return base_distance * multiplier
+         elif num_positions < 7:
+             return base_distance * 1.5
+         else:
+             return base_distance * 2.0
 
     def get_dynamic_lot(self, num_positions):
          """Calculates lot size based on equity and multiplier."""
