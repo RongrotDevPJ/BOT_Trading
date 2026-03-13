@@ -1,3 +1,4 @@
+import os
 import time
 import logging
 from logging.handlers import TimedRotatingFileHandler
@@ -11,11 +12,15 @@ from time_filter import TimeFilterClient
 import config
 
 # Setup Logging
+log_dir = r"C:\Users\t-rongrot.but\Desktop\BOT_Trading\Log_HistoryOrder"
+os.makedirs(log_dir, exist_ok=True)
+log_filename = os.path.join(log_dir, f"{config.SYMBOL}_bot.log")
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        TimedRotatingFileHandler("smart_grid_bot.log", when="midnight", interval=1, backupCount=7),
+        TimedRotatingFileHandler(log_filename, when="midnight", interval=1, backupCount=7),
         logging.StreamHandler()
     ]
 )
