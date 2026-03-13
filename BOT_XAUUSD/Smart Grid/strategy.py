@@ -1,11 +1,18 @@
 import logging
+import time
 import MetaTrader5 as ag
 import config
+from csv_logger import CSVLogger
 
 class SmartGridStrategy:
     def __init__(self):
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger("SmartGrid")
+        self.csv_logger = CSVLogger(config.SYMBOL)
         self.hedged_this_session = False # Prevent multiple hedges in the same run
+        self.last_dynamic_log_time = 0 # Prevent log spam
+        self.last_trend_log_time = 0
+        self.last_gap_log_time = 0
+        self.last_analysis_log_time = 0
 
     def is_max_drawdown_reached(self, executor, tick):
          """Checks if current account drawdown exceeds the max limit and performs Hedging if enabled."""
@@ -21,7 +28,8 @@ class SmartGridStrategy:
              drawdown_percent = ((balance - equity) / balance) * 100
              if drawdown_percent > config.MAX_DD_PERCENT:
                  if not self.hedged_this_session:
-                     self.logger.critical(f"MAX DRAWDOWN REACHED! DD={drawdown_percent:.2f}%.")
+                     self.logger.critical(f"🔥 MAX DRAWDOWN REACHED! DD={drawdown_percent:.2f}% (Balance={balance:.2f}, Equity={equity:.2f})")
+                     self.csv_logger.log_event(action="MAX DRAWDOWN", drawdown=drawdown_percent, balance=balance, equity=equity, notes="Auto-Hedge triggered" if getattr(config, 'ENABLE_HEDGE_ON_DD', False) else "")
                      
                      if getattr(config, 'ENABLE_HEDGE_ON_DD', False) and executor and tick:
                          self.execute_hedge(executor, tick)
@@ -129,14 +137,16 @@ class SmartGridStrategy:
         is_rsi_sell = current_rsi >= config.RSI_SELL_LEVEL
 
         if is_rsi_buy and is_trend_buy:
-            trend_str = f"| Price > EMA 200 " if enable_trend else "(Trend Filter OFF)"
-            self.logger.info(f"Grid Buy Entry: RSI={current_rsi:.2f} <= {config.RSI_BUY_LEVEL} {trend_str}")
+            trend_str = f"| Price({tick.ask:.5f}) > EMA({current_ema:.5f})" if enable_trend else "(Trend Filter OFF)"
+            self.logger.info(f"✨ [Analysis] Initial BUY Entry Triggered: RSI={current_rsi:.2f} <= {config.RSI_BUY_LEVEL} {trend_str}")
             executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, config.START_LOT, tick.ask)
+            self.csv_logger.log_event(action="Initial Entry", side="BUY", price=tick.ask, rsi=current_rsi, ema=current_ema, lot_size=config.START_LOT)
             
         elif is_rsi_sell and is_trend_sell:
-            trend_str = f"| Price < EMA 200 " if enable_trend else "(Trend Filter OFF)"
-            self.logger.info(f"Grid Sell Entry: RSI={current_rsi:.2f} >= {config.RSI_SELL_LEVEL} {trend_str}")
+            trend_str = f"| Price({tick.bid:.5f}) < EMA({current_ema:.5f})" if enable_trend else "(Trend Filter OFF)"
+            self.logger.info(f"✨ [Analysis] Initial SELL Entry Triggered: RSI={current_rsi:.2f} >= {config.RSI_SELL_LEVEL} {trend_str}")
             executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, config.START_LOT, tick.bid)
+            self.csv_logger.log_event(action="Initial Entry", side="SELL", price=tick.bid, rsi=current_rsi, ema=current_ema, lot_size=config.START_LOT)
 
     def get_dynamic_grid_distance(self, num_positions, current_atr):
          """Calculates distance based on Base ATR distance and smart step dynamic multipliers."""
@@ -158,7 +168,12 @@ class SmartGridStrategy:
          else:
              multiplier = 2.0
              
-         self.logger.info(f"[System Check] Dynamic Distance Active: Layer {num_positions + 1}, Multiplier {multiplier}x")
+         current_time = time.time()
+         if current_time - self.last_dynamic_log_time > 60:
+             atr_str = f"{current_atr:.5f}" if current_atr is not None else "0"
+             self.logger.info(f"🔍 [System Check] Dynamic Distance Layer {num_positions + 1}: BaseDist={base_distance:.1f}pts, Multiplier={multiplier}x => Required Distance={base_distance * multiplier:.1f}pts (ATR={atr_str})")
+             self.last_dynamic_log_time = current_time
+             
          return base_distance * multiplier
 
     def get_dynamic_lot(self, num_positions):
@@ -208,7 +223,10 @@ class SmartGridStrategy:
         # Crash Recovery / Max Gap check
         max_allowed_distance = required_distance * config.MAX_GAP_MULTIPLIER
         if distance_points > max_allowed_distance:
-             self.logger.warning(f"Price gapped too far! ({distance_points:.1f} > {max_allowed_distance:.1f} max). Pausing safely.")
+             current_time = time.time()
+             if current_time - self.last_gap_log_time > 60:
+                 self.logger.warning(f"Price gapped too far! ({distance_points:.1f} > {max_allowed_distance:.1f} max). Pausing safely.")
+                 self.last_gap_log_time = current_time
              return False
 
         if distance_points >= required_distance:
@@ -218,15 +236,31 @@ class SmartGridStrategy:
             if side == 0 and current_price < latest_position.price_open:
                 # Price dropped below last buy order. Check if we are still above EMA (Uptrend) or if filter is disabled
                 if not enable_trend or current_price > current_ema:
+                    current_time = time.time()
+                    if current_time - self.last_analysis_log_time > 60:
+                        atr_str = f"{current_atr:.5f}" if current_atr is not None else "0"
+                        self.logger.info(f"✨ [Analysis] BUY Grid Open: Price={current_price:.5f}, LastBuyPrice={latest_position.price_open:.5f}, Moved={distance_points:.1f}pts, Required={required_distance:.1f}pts, ATR={atr_str}, EMA={current_ema:.5f}")
+                        self.last_analysis_log_time = current_time
                     return True
                 else:
-                    self.logger.info(f"Trend Filter: Blocked Buy Grid because Price ({current_price}) is below EMA ({current_ema:.5f})")
+                    current_time = time.time()
+                    if current_time - self.last_trend_log_time > 60:
+                        self.logger.info(f"🚫 [Trend Filter] Blocked BUY Grid: Price({current_price:.5f}) is BELOW EMA({current_ema:.5f}) (Downtrend detected). Dist Moved={distance_points:.1f}pts")
+                        self.last_trend_log_time = current_time
             elif side == 1 and current_price > latest_position.price_open:
                 # Price rose above last sell order. Check if we are still below EMA (Downtrend) or if filter is disabled
                 if not enable_trend or current_price < current_ema:
+                    current_time = time.time()
+                    if current_time - self.last_analysis_log_time > 60:
+                        atr_str = f"{current_atr:.5f}" if current_atr is not None else "0"
+                        self.logger.info(f"✨ [Analysis] SELL Grid Open: Price={current_price:.5f}, LastSellPrice={latest_position.price_open:.5f}, Moved={distance_points:.1f}pts, Required={required_distance:.1f}pts, ATR={atr_str}, EMA={current_ema:.5f}")
+                        self.last_analysis_log_time = current_time
                     return True
                 else:
-                    self.logger.info(f"Trend Filter: Blocked Sell Grid because Price ({current_price}) is above EMA ({current_ema:.5f})")
+                    current_time = time.time()
+                    if current_time - self.last_trend_log_time > 60:
+                        self.logger.info(f"🚫 [Trend Filter] Blocked SELL Grid: Price({current_price:.5f}) is ABOVE EMA({current_ema:.5f}) (Uptrend detected). Dist Moved={distance_points:.1f}pts")
+                        self.last_trend_log_time = current_time
                 
         return False
         
@@ -251,8 +285,13 @@ class SmartGridStrategy:
         if buy_positions:
             if self.needs_new_grid_level(buy_positions, current_ask, side=0, current_atr=current_atr, current_ema=current_ema):
                 dynamic_lot = self.get_dynamic_lot(len(buy_positions))
-                self.logger.info(f"Opening BUY Grid. Level: {len(buy_positions)+1}, Lot: {dynamic_lot}")
+                self.logger.info(f"🛒 Executing BUY Grid. Level: {len(buy_positions)+1}, Lot: {dynamic_lot}")
                 executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, dynamic_lot, current_ask)
+                
+                latest_p = max(buy_positions, key=lambda p: p.time)
+                dist_moved = abs(current_ask - latest_p.price_open) / ag.symbol_info(config.SYMBOL).point
+                req_dist = self.get_dynamic_grid_distance(len(buy_positions), current_atr)
+                self.csv_logger.log_event(action="Grid Open", side="BUY", price=current_ask, atr=current_atr, ema=current_ema, grid_level=len(buy_positions)+1, lot_size=dynamic_lot, distance_moved=dist_moved, required_distance=req_dist)
                 
             if not config.USE_TRAILING_STOP:
                 new_tp = self.calculate_basket_tp(buy_positions, side=0)
@@ -262,8 +301,13 @@ class SmartGridStrategy:
         if sell_positions:
              if self.needs_new_grid_level(sell_positions, current_bid, side=1, current_atr=current_atr, current_ema=current_ema):
                  dynamic_lot = self.get_dynamic_lot(len(sell_positions))
-                 self.logger.info(f"Opening SELL Grid. Level: {len(sell_positions)+1}, Lot: {dynamic_lot}")
+                 self.logger.info(f"🛒 Executing SELL Grid. Level: {len(sell_positions)+1}, Lot: {dynamic_lot}")
                  executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, dynamic_lot, current_bid)
+                 
+                 latest_p = max(sell_positions, key=lambda p: p.time)
+                 dist_moved = abs(current_bid - latest_p.price_open) / ag.symbol_info(config.SYMBOL).point
+                 req_dist = self.get_dynamic_grid_distance(len(sell_positions), current_atr)
+                 self.csv_logger.log_event(action="Grid Open", side="SELL", price=current_bid, atr=current_atr, ema=current_ema, grid_level=len(sell_positions)+1, lot_size=dynamic_lot, distance_moved=dist_moved, required_distance=req_dist)
                  
              if not config.USE_TRAILING_STOP:
                  new_tp = self.calculate_basket_tp(sell_positions, side=1)

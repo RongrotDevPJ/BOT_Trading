@@ -11,7 +11,7 @@ from time_filter import TimeFilterClient
 import config
 
 # Setup Logging
-log_dir = r"C:\Users\t-rongrot.but\Desktop\BOT_Trading\Log_HistoryOrder"
+log_dir = r"C:\Users\t-rongrot.but\Desktop\BOT_Trading\Log_HistoryOrder\Text_Logs"
 os.makedirs(log_dir, exist_ok=True)
 log_filename = os.path.join(log_dir, f"{config.SYMBOL}_bot.log")
 
@@ -19,23 +19,12 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        TimedRotatingFileHandler(log_filename, when="midnight", interval=1, backupCount=7),
+        TimedRotatingFileHandler(log_filename, when="midnight", interval=1, backupCount=7, encoding='utf-8'),
         logging.StreamHandler()
-    ]
+    ],
+    force=True
 )
 logger = logging.getLogger("MainControl")
-
-def send_line_notify(message):
-    token = getattr(config, 'LINE_NOTIFY_TOKEN', '')
-    if not token:
-        return
-    url = "https://notify-api.line.me/api/notify"
-    headers = {"Authorization": f"Bearer {token}"}
-    data = {"message": message}
-    try:
-        requests.post(url, headers=headers, data=data, timeout=5)
-    except Exception as e:
-        logger.error(f"Failed to send Line Notify: {e}")
 
 def main():
     logger.info("Starting Smart Grid MT5 Bot...")
@@ -52,6 +41,8 @@ def main():
         return
 
     last_heartbeat = time.time()
+    last_snapshot_log = 0
+    last_csv_snapshot_log = 0
     
     last_reset_day = None
     start_of_day_equity = None
@@ -106,8 +97,8 @@ def main():
                         
                         if current_equity >= target_equity:
                             logger.critical(f"🎉 DAILY TARGET REACHED! Equity {current_equity:.2f} >= {target_equity:.2f} (15% Lock)")
-                            send_line_notify(f"🎉 [{config.SYMBOL}] เป้าหมาย 15% สำเร็จแล้ว!\nEquity เริ่มต้น: {start_of_day_equity:.2f}\nEquity ปัจจุบัน: {current_equity:.2f}")
                             
+
                             # Close all positions
                             positions = strategy.get_positions()
                             for p in positions:
@@ -126,6 +117,19 @@ def main():
                 current_atr = indicator_client.get_atr(config.SYMBOL, config.TIMEFRAME, config.ATR_PERIOD)
                 current_ema = indicator_client.get_ema(config.SYMBOL, config.EMA_TIMEFRAME, config.EMA_PERIOD)
                 
+                # --- Periodic Snapshot Log (Every 15 mins) ---
+                if current_time - last_snapshot_log > 900:
+                    rsi_val = f"{current_rsi:.2f}" if current_rsi is not None else "N/A"
+                    atr_val = f"{current_atr:.5f}" if current_atr is not None else "N/A"
+                    ema_val = f"{current_ema:.5f}" if current_ema is not None else "N/A"
+                    logger.info(f"📊 [Market Snapshot] Price: {tick.bid:.5f}/{tick.ask:.5f} | RSI({getattr(config, 'RSI_PERIOD', 14)}): {rsi_val} | ATR({getattr(config, 'ATR_PERIOD', 14)}): {atr_val} | EMA({getattr(config, 'EMA_PERIOD', 200)}): {ema_val}")
+                    last_snapshot_log = current_time
+                    
+                # --- Permanent CSV Market Snapshot (Every 1 Hour) ---
+                if current_time - last_csv_snapshot_log > 3600:
+                    strategy.csv_logger.log_event(action="Market Snapshot", price=tick.ask, rsi=current_rsi, atr=current_atr, ema=current_ema)
+                    last_csv_snapshot_log = current_time
+
                 # Check Time Filter before allowing NEW initial entries
                 if time_filter.is_allowed_to_trade():
                     # Check initial entry (if no grid active)
