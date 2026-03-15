@@ -8,7 +8,7 @@ class CSVLogger:
     
     def __init__(self, symbol):
         self.symbol = symbol
-        self.log_dir = r"C:\Users\t-rongrot.but\Desktop\BOT_Trading\Log_HistoryOrder\Analytics_Data"
+        self.log_dir = os.path.join(os.getcwd(), "Logs")
         os.makedirs(self.log_dir, exist_ok=True)
         self.filepath = os.path.join(self.log_dir, f"{self.symbol}_Analytics.csv")
         self._init_file()
