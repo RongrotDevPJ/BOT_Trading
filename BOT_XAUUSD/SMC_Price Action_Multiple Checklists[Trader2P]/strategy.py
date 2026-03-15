@@ -55,17 +55,31 @@ class SMCSniperStrategy:
         return None
 
     def calculate_lot_size(self, balance, sl_points):
-        """Calculates lot size based on % risk and SL distance."""
+        """Calculates lot size based on % risk, SL distance, and broker limits."""
         if sl_points <= 0: return 0.01
         
-        risk_amount = balance * (config.RISK_PERCENT / 100.0)
-        # For XAUUSD, 1 point usually = 0.01 or 0.1 depending on broker. 
-        # But we'll use a simplified formula: Lot = Risk / (SL_Points * TickValue)
-        # Most brokers for Gold use 0.01 as point.
-        tick_value = 1.0 # Placeholder, should be adjusted based on MT5 symbol info
+        symbol_info = ag.symbol_info(config.SYMBOL)
+        if not symbol_info: return 0.01
         
-        lot = risk_amount / (sl_points * tick_value * 10) # 10 is factor for typical Gold contract
-        return round(max(0.01, min(lot, 10.0)), 2)
+        risk_amount = balance * (config.RISK_PERCENT / 100.0)
+        
+        # XAUUSD lot calculation: 
+        # Risk = Lot * SL_Points * TickValue * ContractSize
+        # So: Lot = Risk / (SL_Points * TickValue * ContractSize)
+        # Note: on many brokers for Gold, SL_Points is already handle by the point value.
+        tick_value = symbol_info.trade_tick_value
+        tick_size = symbol_info.trade_tick_size
+        
+        if tick_size == 0 or sl_points == 0: return symbol_info.volume_min
+        
+        lot = risk_amount / (sl_points * tick_value / tick_size)
+        
+        # Round to nearest lot step
+        step = symbol_info.volume_step
+        lot = round(lot / step) * step
+        
+        # Bound by min/max
+        return round(max(symbol_info.volume_min, min(lot, symbol_info.volume_max)), 2)
 
     def run_sniper_check(self, executor, tick):
         """Main entry checklist loop."""

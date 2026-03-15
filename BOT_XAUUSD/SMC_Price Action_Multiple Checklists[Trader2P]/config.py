@@ -16,7 +16,8 @@ BREAKEVEN_AT_R = 1.0  # Move SL to entry when profit reaches 1R
 
 # --- SMC Parameters ---
 FRACTAL_NEIGHBORS = 2 # Number of candles to check on each side for HH/HL
-OB_IMBALANCE_MIN_GAP = 0.5 # Min points gap to consider it an imbalance
+MIN_FVG_SIZE = 0.3    # Minimum Points for an Imbalance to be valid (to filter tiny gaps)
+OB_IMBALANCE_MIN_GAP = 0.5 # Min points gap for OB validation
 FIB_DISCOUNT_LEVEL = 0.618
 FIB_DEEP_DISCOUNT = 0.786
 

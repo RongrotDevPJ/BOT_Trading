@@ -52,59 +52,56 @@ class MarketAnalyzer:
         return highs, lows
 
     def analyze_structure(self, symbol, timeframe_str):
-        """Detects BOS and CHoCH to determine current Bias."""
+        """Detects BOS and CHoCH to determine current Bias with Body Close confirmation."""
         rates = self.get_rates(symbol, timeframe_str)
         if len(rates) < 20: return "NEUTRAL", None, None
 
         highs, lows = self.find_fractals(rates)
         if not highs or not lows: return "NEUTRAL", None, None
 
-        # Current price (latest close)
-        current_price = rates[-1]['close']
-        
+        # --- Trend Bias Logic with Body Close Confirmation ---
+        # We check if the most recent finished candles have closed 
+        # above the last fractal high or below the last fractal low.
         last_high = highs[-1]
         last_low = lows[-1]
         
-        # Simple Logic for BOS/CHoCH
-        # If price breaks last High -> Uptrend (BOS)
-        # If price breaks last Low -> Downtrend (BOS)
-        # If trend was UP and breaks last Low -> CHoCH (Reversal to Down)
-        
-        # For simplicity in this version, we use the relative positions of the last 2 highs/lows
-        if len(highs) >= 2 and len(lows) >= 2:
-            prev_high = highs[-2]
-            prev_low = lows[-2]
-            
-            if last_high['price'] > prev_high['price'] and last_low['price'] > prev_low['price']:
-                bias = "BULLISH"
-            elif last_high['price'] < prev_high['price'] and last_low['price'] < prev_low['price']:
-                bias = "BEARISH"
-            else:
-                bias = "RANGING"
-        else:
-            bias = "NEUTRAL"
+        # Check the last 3 candles for a body close break
+        current_bias = "NEUTRAL"
+        for i in range(-1, -4, -1):
+            if rates[i]['close'] > last_high['price']:
+                current_bias = "BULLISH" # BOS Up (Confirmed by Body Close)
+                break
+            elif rates[i]['close'] < last_low['price']:
+                current_bias = "BEARISH" # BOS Down (Confirmed by Body Close)
+                break
 
-        return bias, last_high, last_low
+        # If no immediate break, use relative fractal positions (H-H, L-L)
+        if current_bias == "NEUTRAL" and len(highs) >= 2 and len(lows) >= 2:
+            if last_high['price'] > highs[-2]['price'] and last_low['price'] > lows[-2]['price']:
+                current_bias = "BULLISH"
+            elif last_high['price'] < highs[-2]['price'] and last_low['price'] < lows[-2]['price']:
+                current_bias = "BEARISH"
+
+        return current_bias, last_high, last_low
 
     def find_order_blocks(self, rates, highs, lows):
-        """Finds valid Order Blocks (Supply/Demand zones) with Imbalance."""
-        obs = [] # list of {'type': 'DEMAND'/'SUPPLY', 'top': float, 'bottom': float, 'validated': bool}
+        """Finds valid Order Blocks (Supply/Demand zones) with Validated Imbalance (FVG)."""
+        obs = []
         
         # Look for Demand Zones (Last bearish candle before a strong move up)
         for low in lows:
             idx = low['index']
             if idx + 2 >= len(rates): continue
             
-            # Check for Imbalance (FVG) right after the fractal
             # FVG Up: low of candle[i+2] > high of candle[i]
-            if rates[idx+2]['low'] > rates[idx]['high'] + config.OB_IMBALANCE_MIN_GAP:
-                # Valid Demand Zone! Use the body/range of the fractal candle or the candle before it
+            imbalance = rates[idx+2]['low'] - rates[idx]['high']
+            if imbalance >= config.MIN_FVG_SIZE:
                 obs.append({
                     'type': 'DEMAND',
                     'top': rates[idx]['high'],
                     'bottom': rates[idx]['low'],
                     'time': rates[idx]['time'],
-                    'strength': rates[idx+2]['low'] - rates[idx]['high']
+                    'strength': imbalance
                 })
 
         # Look for Supply Zones (Last bullish candle before a strong move down)
@@ -113,13 +110,14 @@ class MarketAnalyzer:
             if idx + 2 >= len(rates): continue
             
             # FVG Down: high of candle[i+2] < low of candle[i]
-            if rates[idx+2]['high'] < rates[idx]['low'] - config.OB_IMBALANCE_MIN_GAP:
+            imbalance = rates[idx]['low'] - rates[idx+2]['high']
+            if imbalance >= config.MIN_FVG_SIZE:
                 obs.append({
                     'type': 'SUPPLY',
                     'top': rates[idx]['high'],
                     'bottom': rates[idx]['low'],
                     'time': rates[idx]['time'],
-                    'strength': rates[idx]['low'] - rates[idx+2]['high']
+                    'strength': imbalance
                 })
         
         return obs
