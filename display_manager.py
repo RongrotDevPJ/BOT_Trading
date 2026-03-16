@@ -5,8 +5,14 @@ try:
 except ImportError:
     psutil = None
 
+# Try to enable ANSI support on Windows
+if os.name == 'nt':
+    # This enables VT100 support on modern Windows 10/11 consoles
+    os.system('')
+
 # Module-level variable to track last update time
 _last_render_time = 0
+_ansi_supported = True # Assume true, will fallback if needed
 
 def render_dashboard(
     symbol, 
@@ -36,9 +42,16 @@ def render_dashboard(
     
     _last_render_time = current_time
 
-    # Anti-flicker: Move cursor to top instead of clearing screen
-    # \033[H moves cursor to Home (1,1)
-    print('\033[H', end='')
+    # Anti-flicker: Move cursor to top or clear screen if ANSI failing
+    # If the first character of the dashboard rendering is ←[H, it means ANSI is not working
+    if os.name == 'nt' and _ansi_supported:
+        # We also clear once every 30 renders just in case
+        if int(current_time) % 60 == 0:
+            os.system('cls')
+        print('\033[H', end='')
+    else:
+        # Fallback to standard clear
+        os.system('cls' if os.name == 'nt' else 'clear')
 
     # Date and Time
     now = datetime.datetime.now()

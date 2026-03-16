@@ -24,13 +24,15 @@ log_dir = os.path.join(project_root, "Log_HistoryOrder", "Text_Logs")
 os.makedirs(log_dir, exist_ok=True)
 log_filename = os.path.join(log_dir, f"{config.SYMBOL}_bot.log")
 
+file_handler = TimedRotatingFileHandler(log_filename, when="midnight", interval=1, backupCount=7, encoding='utf-8')
+file_handler.setLevel(logging.INFO)
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.WARNING)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        TimedRotatingFileHandler(log_filename, when="midnight", interval=1, backupCount=7, encoding='utf-8'),
-        logging.StreamHandler()
-    ],
+    handlers=[file_handler, console_handler],
     force=True
 )
 logger = logging.getLogger("MainControl")
