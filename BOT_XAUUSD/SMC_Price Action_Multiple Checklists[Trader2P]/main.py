@@ -63,6 +63,7 @@ def main():
 
     last_heartbeat = time.time()
     daily_target_reached = False
+    last_reset_day = None
     
     # UI Cache
     last_ui_data_update = 0
@@ -86,6 +87,19 @@ def main():
                 
             mt5_status = "CONNECTED" if client.is_connected() else "DISCONNECTED"
             
+            # --- Daily Equity Target & Reset Logic ---
+            current_server_time = datetime.datetime.fromtimestamp(tick.time) if tick else datetime.datetime.now()
+            # New trading day starts at 05:00 Broker Time
+            trading_day = current_server_time.date() if current_server_time.hour >= 5 else current_server_time.date() - datetime.timedelta(days=1)
+            
+            if last_reset_day != trading_day:
+                account_info = client.get_account_info()
+                if account_info:
+                    start_of_day_equity = account_info.equity
+                    last_reset_day = trading_day
+                    daily_target_reached = False
+                    logger.info(f"--- DAILY RESET --- New trading day started ({trading_day}). Starting Equity: {start_of_day_equity:.2f}")
+
             # Update UI Data Cache every 10 seconds
             if current_time - last_ui_data_update >= 10:
                 account_info = client.get_account_info()
