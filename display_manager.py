@@ -36,8 +36,8 @@ def render_dashboard(
     global _last_render_time
     current_time = time.time()
     
-    # Throttle rendering to every 2 seconds
-    if current_time - _last_render_time < 2:
+    # Throttle rendering to every 5 seconds
+    if current_time - _last_render_time < 5:
         return
     
     _last_render_time = current_time
