@@ -4,14 +4,12 @@ import datetime
 from market_analyzer import MarketAnalyzer
 from indicator import IndicatorClient
 from csv_logger import CSVLogger
-from line_notify import LineNotify
 
 class SMCSniperStrategy:
     def __init__(self, mt5_client):
         self.mt5_client = mt5_client
         self.analyzer = MarketAnalyzer(mt5_client)
         self.indicators = IndicatorClient()
-        self.notifier = LineNotify()
         self.logger = logging.getLogger(__name__)
         self.csv_logger = CSVLogger(config.SYMBOL)
         
@@ -89,7 +87,6 @@ class SMCSniperStrategy:
         
         # Alert if bias changes
         if h1_bias != self.last_bias:
-            self.notifier.send_message(f"🚨 [SMC Alert] {config.SYMBOL} H1 Bias Changed to {h1_bias}")
             self.last_bias = h1_bias
 
         if h1_bias not in ["BULLISH", "BEARISH"]:
