@@ -8,7 +8,7 @@ cd ..\"BOT_XAUUSD\SMC_Price Action_Multiple Checklists[Trader2P]"
 :: call venv\Scripts\activate
 
 echo ======================================================
-echo Starting XAUUSD SMC & Price Action Sniper Bot...
+echo Starting XAUUSD SMC ^& Price Action Sniper Bot...
 echo ======================================================
 python main.py
 pause

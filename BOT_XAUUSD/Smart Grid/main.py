@@ -9,6 +9,13 @@ from strategy import SmartGridStrategy
 from indicator import IndicatorClient
 from time_filter import TimeFilterClient
 import config
+import sys
+# Add project root to path for display_manager
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+from display_manager import render_dashboard
 
 # Setup Logging
 # Get the root directory of the project (BOT_Trading)
@@ -29,6 +36,20 @@ logging.basicConfig(
     force=True
 )
 logger = logging.getLogger("MainControl")
+
+# Custom handler to capture latest log
+class LatestLogHandler(logging.Handler):
+    def __init__(self):
+        super().__init__()
+        self.latest_msg = "Bot Started"
+        self.latest_time = datetime.datetime.now().strftime("%H:%M:%S")
+
+    def emit(self, record):
+        self.latest_msg = record.getMessage()
+        self.latest_time = datetime.datetime.fromtimestamp(record.created).strftime("%H:%M:%S")
+
+latest_log_handler = LatestLogHandler()
+logger.addHandler(latest_log_handler)
 
 def main():
     logger.info("Starting Smart Grid MT5 Bot...")
@@ -61,6 +82,55 @@ def main():
                 time.sleep(10)
                 client.connect() # Attempt to reconnect
                 continue
+                
+            # Define default values for UI if not yet calculated
+            equity = 0
+            balance = 0
+            daily_profit_pct = 0
+            drawdown_pct = 0
+            mt5_status = "CONNECTED" if client.is_connected() else "DISCONNECTED"
+            
+            account_info = client.get_account_info()
+            if account_info:
+                equity = account_info.equity
+                balance = account_info.balance
+                if start_of_day_equity and start_of_day_equity > 0:
+                    daily_profit_pct = ((equity - start_of_day_equity) / start_of_day_equity) * 100
+                if balance > 0:
+                    drawdown_pct = ((balance - equity) / balance) * 100
+
+            # Get latest stats from strategy for the Stat Line
+            # Grid Stats: Layer: {n} | Dist: {pts}pts | Multi: {x}x
+            positions = strategy.get_positions()
+            layer_count = len(positions)
+            # Assuming strategy has these attributes or we can derive them from config
+            dist_pts = getattr(config, 'GRID_DISTANCE_POINTS', 0)
+            multi_x = getattr(config, 'LOT_MULTIPLIER', 0)
+            stat_line = f"Layer: {layer_count} | Dist: {dist_pts}pts | Multi: {multi_x}x"
+            
+            # Guard values
+            tick = client.get_tick(config.SYMBOL)
+            current_spread = int((tick.ask - tick.bid) / client.get_symbol_info(config.SYMBOL).point) if tick else 0
+            max_spread = getattr(config, 'MAX_SPREAD', 0)
+            news_status = "STABLE" # Placeholder if news filter not fully integrated here
+
+            # Render Dashboard
+            render_dashboard(
+                symbol=config.SYMBOL,
+                equity=equity,
+                balance=balance,
+                daily_profit_pct=daily_profit_pct,
+                drawdown_pct=drawdown_pct,
+                strategy_name="Smart Grid",
+                stat_line=stat_line,
+                current_spread=current_spread,
+                max_spread=max_spread,
+                news_status=news_status,
+                log_time=latest_log_handler.latest_time,
+                log_message=latest_log_handler.latest_msg,
+                mt5_status=mt5_status,
+                target_pct=getattr(config, 'DAILY_TARGET_PERCENT', 15.0)
+            )
                 
             # 2. Heartbeat logging
             current_time = time.time()
