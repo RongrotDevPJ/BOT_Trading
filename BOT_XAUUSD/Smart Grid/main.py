@@ -177,18 +177,18 @@ def main():
                         target_equity = start_of_day_equity * (1 + getattr(config, 'DAILY_TARGET_PERCENT', 15.0) / 100.0)
                         
                         if current_equity >= target_equity:
-                            logger.critical(f"🎉 DAILY TARGET REACHED! Equity {current_equity:.2f} >= {target_equity:.2f} (15% Lock)")
-                            
-                            # Close all positions
-                            positions = strategy.get_positions()
-                            for p in positions:
-                                executor.close_position(p, tick)
-                                
+                            logger.critical(f"🎉 DAILY TARGET REACHED! Equity {current_equity:.2f} >= {target_equity:.2f}. Entering Close-Only mode.")
                             daily_target_reached = True
                             
                 if daily_target_reached:
-                    time.sleep(60)
-                    continue
+                    positions = strategy.get_positions()
+                    if not positions:
+                        # Only sleep/wait if all positions are now closed
+                        time.sleep(60)
+                        continue
+                    else:
+                        # If target reached but positions still open, we skip INITIAL entry but allow grid logic
+                        pass
 
                 # Fetch Indicators
                 current_rsi = indicator_client.get_rsi(config.SYMBOL, config.TIMEFRAME, config.RSI_PERIOD)
@@ -208,11 +208,11 @@ def main():
                     strategy.csv_logger.log_event(action="Market Snapshot", price=tick.ask, rsi=current_rsi, atr=current_atr, ema=current_ema)
                     last_csv_snapshot_log = current_time
 
-                # Check Time Filter before allowing NEW initial entries
-                if time_filter.is_allowed_to_trade():
+                # Check Time Filter AND Daily Target before allowing NEW initial entries
+                if not daily_target_reached and time_filter.is_allowed_to_trade():
                     strategy.check_initial_entry(executor, current_rsi, current_ema, tick)
 
-                # Execute grid logic
+                # Execute grid logic (Always allowed even if target reached, to close existing grid)
                 strategy.check_grid_logic(executor, current_atr, current_ema)
                 
                 # Manage positions

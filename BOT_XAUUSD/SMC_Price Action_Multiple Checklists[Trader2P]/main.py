@@ -62,6 +62,7 @@ def main():
         return
 
     last_heartbeat = time.time()
+    daily_target_reached = False
     
     # UI Cache
     last_ui_data_update = 0
@@ -96,6 +97,21 @@ def main():
                     if cached_balance > 0:
                         cached_drawdown_pct = ((cached_balance - cached_equity) / cached_balance) * 100
                 last_ui_data_update = current_time
+
+            # Check Daily Target
+            if not daily_target_reached and start_of_day_equity and start_of_day_equity > 0:
+                current_equity = client.get_account_info().equity
+                target_equity = start_of_day_equity * (1 + getattr(config, 'DAILY_TARGET_PERCENT', 15.0) / 100.0)
+                if current_equity >= target_equity:
+                    logger.critical(f"🎉 DAILY TARGET REACHED! Equity {current_equity:.2f} >= {target_equity:.2f}. Entering Close-Only mode.")
+                    daily_target_reached = True
+
+            if daily_target_reached:
+                positions = executor.get_positions(config.SYMBOL)
+                if not positions:
+                    # Target reached and all sniper positions closed -> Sleep
+                    time.sleep(60)
+                    continue
 
             # Sniper Stats: Bias: {direction} | Zone: {status} | Fib: {level}
             bias = strategy.last_checklist_log.get("H1 Bias", "WAIT")
@@ -136,8 +152,10 @@ def main():
             # 3. Core Strategy Logic
             try:
                 # Update data and check signals
-                strategy.run_sniper_check(executor, tick)
-                # Manage existing trades
+                if not daily_target_reached:
+                    strategy.run_sniper_check(executor, tick)
+                
+                # Manage existing trades (Always allowed to handle TP/SL/Trailing)
                 strategy.manage_trades(executor, tick)
 
             except Exception as e:
