@@ -11,7 +11,6 @@ class LineNotify:
     def send_message(self, message):
         """Sends a text message to Line Notify."""
         if not self.token:
-            self.logger.warning("Line Notify token is missing. Skipping notification.")
             return False
 
         headers = {"Authorization": f"Bearer {self.token}"}
