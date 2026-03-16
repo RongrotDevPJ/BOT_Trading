@@ -136,7 +136,9 @@ def main():
             # 3. Core Strategy Logic
             try:
                 # Update data and check signals
-                strategy.on_tick()
+                strategy.run_sniper_check(executor, tick)
+                # Manage existing trades
+                strategy.manage_trades(executor, tick)
 
             except Exception as e:
                 logger.error(f"Error during strategy execution: {e}", exc_info=True)

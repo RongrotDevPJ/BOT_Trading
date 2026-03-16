@@ -6,14 +6,30 @@ try:
 except ImportError:
     psutil = None
 
-# Try to enable ANSI support on Windows
+# Try to enable ANSI support on Windows using ctypes
+_ansi_supported = False
 if os.name == 'nt':
-    # This enables VT100 support on modern Windows 10/11 consoles
-    os.system('')
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        # ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
+        handle = kernel32.GetStdHandle(-11) # STD_OUTPUT_HANDLE
+        mode = ctypes.c_uint()
+        kernel32.GetConsoleMode(handle, ctypes.byref(mode))
+        mode.value |= 4 
+        kernel32.SetConsoleMode(handle, mode)
+        _ansi_supported = True
+    except Exception:
+        # Fallback to os.system('') which sometimes works in newer Win10/11
+        try:
+            os.system('')
+            _ansi_supported = True
+        except:
+            _ansi_supported = False
 
 # Module-level variable to track last update time
 _last_render_time = 0
-_ansi_supported = True # Assume true, will fallback if needed
+_force_use_cls = False # User can set this to True for legacy behavior
 
 def render_dashboard(
     symbol, 
@@ -43,16 +59,15 @@ def render_dashboard(
     
     _last_render_time = current_time
 
-    # Anti-flicker: Move cursor to top or clear screen if ANSI failing
-    # If the first character of the dashboard rendering is ←[H, it means ANSI is not working
-    if os.name == 'nt' and _ansi_supported:
-        # We also clear once every 30 renders just in case
-        if int(current_time) % 60 == 0:
-            os.system('cls')
-        print('\033[H', end='')
+    # Priority 1: Mandatory clear for Windows (reliable for VPS/Legacy terminals)
+    if os.name == 'nt':
+        os.system('cls')
+    # Priority 2: ANSI positioning for other systems
+    elif _ansi_supported:
+        print('\x1b[H', end='')
+    # Priority 3: Fallback
     else:
-        # Fallback to standard clear
-        os.system('cls' if os.name == 'nt' else 'clear')
+        os.system('clear')
 
     # Date and Time
     now = datetime.datetime.now()
@@ -66,9 +81,16 @@ def render_dashboard(
         cpu = "N/A"
         ram = "N/A"
 
-    # Truncate log message
-    if len(log_message) > 50:
-        log_message = log_message[:47] + "..."
+    # Truncate and filter log message
+    if "HEARTBEAT" in log_message:
+        log_message = "💓 Heartbeat - Bot is active"
+    elif "Market Snapshot" in log_message:
+        # Shorten market snapshot for small VPS windows
+        log_message = log_message.replace("[Market Snapshot]", "📊 Snapshot:")
+    
+    # Strictly limit log length to prevent wrapping in small windows
+    if len(log_message) > 45:
+        log_message = log_message[:42] + "..."
 
     # Column alignment helper (Colon at Column 12)
     def fmt_line(label, value):
