@@ -61,6 +61,10 @@ class MT5Client:
              
          return True
 
+    def get_symbol_info(self, symbol):
+        """Gets symbol information."""
+        return ag.symbol_info(symbol)
+
     def get_tick(self, symbol):
         """Gets the latest tick data for a symbol."""
         tick = ag.symbol_info_tick(symbol)
