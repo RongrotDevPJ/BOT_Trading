@@ -253,3 +253,5 @@ Timestamp,Action,Symbol,Side,Price,RSI,ATR,EMA,GridLevel,DistanceMoved,RequiredD
 2026-03-16 10:09:08,Initial Entry,EURUSD,SELL,1.14517,65.25,,1.14941,,,,0.05,,,,
 2026-03-16 10:41:01,Market Snapshot,EURUSD,,1.14529,60.85,0.00026,1.14933,,,,,,,,
 2026-03-16 10:42:31,Market Snapshot,EURUSD,,1.14531,61.60,0.00026,1.14933,,,,,,,,
+2026-03-16 17:49:25,Market Snapshot,EURUSD,,1.14714,69.61,0.00052,1.14814,,,,,,,,
+2026-03-16 17:49:25,Initial Entry,EURUSD,SELL,1.14704,69.61,,1.14814,,,,0.05,,,,

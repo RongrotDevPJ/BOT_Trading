@@ -1,6 +1,12 @@
-import os
+import time
 import datetime
-import psutil
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
+# Module-level variable to track last update time
+_last_render_time = 0
 
 def render_dashboard(
     symbol, 
@@ -19,10 +25,20 @@ def render_dashboard(
     target_pct=15.0
 ):
     """
-    Renders a fixed-width dashboard to the terminal.
+    Renders a fixed-width dashboard to the terminal with anti-flicker and throttling.
     """
-    # Clear screen
-    os.system('cls' if os.name == 'nt' else 'clear')
+    global _last_render_time
+    current_time = time.time()
+    
+    # Throttle rendering to every 2 seconds
+    if current_time - _last_render_time < 2:
+        return
+    
+    _last_render_time = current_time
+
+    # Anti-flicker: Move cursor to top instead of clearing screen
+    # \033[H moves cursor to Home (1,1)
+    print('\033[H', end='')
 
     # Date and Time
     now = datetime.datetime.now()

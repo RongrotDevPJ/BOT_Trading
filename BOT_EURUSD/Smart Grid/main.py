@@ -68,39 +68,45 @@ def main():
 
     last_heartbeat = time.time()
     last_snapshot_log = 0
-    last_csv_snapshot_log = 0 # This will trigger snapshot immediately as current_time - 0 > 3600
+    last_csv_snapshot_log = 0 
     
     last_reset_day = None
     start_of_day_equity = None
     daily_target_reached = False
 
+    # UI Cache
+    last_ui_data_update = 0
+    cached_equity = 0
+    cached_balance = 0
+    cached_daily_profit_pct = 0
+    cached_drawdown_pct = 0
+
     try:
         while True:
+            current_time = time.time()
+            
             # 1. Check connection
             if not client.is_connected():
                 logger.warning("Terminal disconnected! Attempting reconnect in 10s...")
                 time.sleep(10)
-                client.connect() # Attempt to reconnect
+                client.connect() 
                 continue
                 
-            # Define default values for UI if not yet calculated
-            equity = 0
-            balance = 0
-            daily_profit_pct = 0
-            drawdown_pct = 0
             mt5_status = "CONNECTED" if client.is_connected() else "DISCONNECTED"
             
-            account_info = client.get_account_info()
-            if account_info:
-                equity = account_info.equity
-                balance = account_info.balance
-                if start_of_day_equity and start_of_day_equity > 0:
-                    daily_profit_pct = ((equity - start_of_day_equity) / start_of_day_equity) * 100
-                if balance > 0:
-                    drawdown_pct = ((balance - equity) / balance) * 100
+            # Update UI Data Cache every 10 seconds
+            if current_time - last_ui_data_update >= 10:
+                account_info = client.get_account_info()
+                if account_info:
+                    cached_equity = account_info.equity
+                    cached_balance = account_info.balance
+                    if start_of_day_equity and start_of_day_equity > 0:
+                        cached_daily_profit_pct = ((cached_equity - start_of_day_equity) / start_of_day_equity) * 100
+                    if cached_balance > 0:
+                        cached_drawdown_pct = ((cached_balance - cached_equity) / cached_balance) * 100
+                last_ui_data_update = current_time
 
             # Get latest stats from strategy for the Stat Line
-            # Grid Stats: Layer: {n} | Dist: {pts}pts | Multi: {x}x
             positions = strategy.get_positions()
             layer_count = len(positions)
             dist_pts = getattr(config, 'GRID_DISTANCE_POINTS', 0)
@@ -117,10 +123,10 @@ def main():
             # Render Dashboard
             render_dashboard(
                 symbol=config.SYMBOL,
-                equity=equity,
-                balance=balance,
-                daily_profit_pct=daily_profit_pct,
-                drawdown_pct=drawdown_pct,
+                equity=cached_equity,
+                balance=cached_balance,
+                daily_profit_pct=cached_daily_profit_pct,
+                drawdown_pct=cached_drawdown_pct,
                 strategy_name="Smart Grid",
                 stat_line=stat_line,
                 current_spread=current_spread,
@@ -133,7 +139,6 @@ def main():
             )
                 
             # 2. Heartbeat logging
-            current_time = time.time()
             if current_time - last_heartbeat > config.HEARTBEAT_INTERVAL_SEC:
                 account_info = client.get_account_info()
                 if account_info:
@@ -147,14 +152,13 @@ def main():
                 # Fetch tick data globally for all checks to ensure consistency
                 tick = client.get_tick(config.SYMBOL)
                 if tick is None:
-                    if time.time() - last_heartbeat > 10: # Log warning every 10s if tick missing
+                    if time.time() - last_heartbeat > 10: 
                         logger.warning(f"Waiting for tick data for {config.SYMBOL}... (Market might be closed or symbol not in Market Watch)")
                     time.sleep(1)
                     continue
 
                 # --- Daily Equity Target Logic ---
                 current_server_time = datetime.datetime.fromtimestamp(tick.time) if tick else datetime.datetime.now()
-                # We consider "trading day" to start at 05:00 server time.
                 trading_day = current_server_time.date() if current_server_time.hour >= 5 else current_server_time.date() - datetime.timedelta(days=1)
                 
                 if last_reset_day != trading_day:
@@ -175,7 +179,6 @@ def main():
                         if current_equity >= target_equity:
                             logger.critical(f"🎉 DAILY TARGET REACHED! Equity {current_equity:.2f} >= {target_equity:.2f} (15% Lock)")
                             
-
                             # Close all positions
                             positions = strategy.get_positions()
                             for p in positions:
@@ -184,10 +187,8 @@ def main():
                             daily_target_reached = True
                             
                 if daily_target_reached:
-                    # Bot pauses operations until the next trading day
                     time.sleep(60)
                     continue
-                # -------------------------------
 
                 # Fetch Indicators
                 current_rsi = indicator_client.get_rsi(config.SYMBOL, config.TIMEFRAME, config.RSI_PERIOD)
@@ -209,29 +210,22 @@ def main():
 
                 # Check Time Filter before allowing NEW initial entries
                 if time_filter.is_allowed_to_trade():
-                    # Check initial entry (if no grid active)
                     strategy.check_initial_entry(executor, current_rsi, current_ema, tick)
 
-                # Execute grid logic (DCA if needed - we allow DCA even if time filter is active to save account)
+                # Execute grid logic
                 strategy.check_grid_logic(executor, current_atr, current_ema)
                 
                 # Manage positions
                 positions = strategy.get_positions()
-                
-                # 0. Ghost Close Check (Check if price hits Basket TP to avoid slippage)
                 executor.ghost_close_check(positions, tick, strategy)
-                
-                # 1. Partial Close (Hedging bad trades with good ones)
                 executor.manage_partial_close(positions, tick)
-                
-                # 2. Trailing Stops (Lock Profit)
                 executor.manage_trailing_stop(positions, tick)
 
             except Exception as e:
                 logger.error(f"Error during strategy execution: {e}", exc_info=True)
 
-            # 4. Loop delay (efficiency)
-            time.sleep(1) # 1 second delay to avoid burning CPU
+            # 4. Loop delay (Reduced busy waiting to save CPU)
+            time.sleep(0.1)
 
     except KeyboardInterrupt:
         logger.info("Bot stopped by user (KeyboardInterrupt).")
