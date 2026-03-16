@@ -87,6 +87,12 @@ def main():
                 
             mt5_status = "CONNECTED" if client.is_connected() else "DISCONNECTED"
             
+            # Get current tick first to avoid UnboundLocalError
+            tick = client.get_tick(config.SYMBOL)
+            if tick is None:
+                time.sleep(1)
+                continue
+
             # --- Daily Equity Target & Reset Logic ---
             current_server_time = datetime.datetime.fromtimestamp(tick.time) if tick else datetime.datetime.now()
             # New trading day starts at 05:00 Broker Time
@@ -134,7 +140,6 @@ def main():
             stat_line = f"Bias: {bias} | Zone: {zone} | Fib: {fib}"
             
             # Guard values
-            tick = client.get_tick(config.SYMBOL)
             symbol_info = client.get_symbol_info(config.SYMBOL)
             current_spread = int((tick.ask - tick.bid) / symbol_info.point) if tick and symbol_info else 0
             max_spread = getattr(config, 'MAX_SPREAD', 0)
