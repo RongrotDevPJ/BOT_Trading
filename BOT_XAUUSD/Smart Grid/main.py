@@ -28,6 +28,7 @@ logger = logging.getLogger("MainControl")
 
 def main():
     logger.info("Starting Smart Grid MT5 Bot...")
+    logger.info(f"CSV Logging initialized at: C:\\Users\\t-rongrot.but\\Desktop\\BOT_Trading\\Log_HistoryOrder\\Analytics_Data")
 
     client = MT5Client()
     executor = TradeExecutor(client)
@@ -42,7 +43,7 @@ def main():
 
     last_heartbeat = time.time()
     last_snapshot_log = 0
-    last_csv_snapshot_log = 0
+    last_csv_snapshot_log = 0 # This will trigger snapshot immediately as current_time - 0 > 3600
     
     last_reset_day = None
     start_of_day_equity = None
@@ -72,6 +73,8 @@ def main():
                 # Fetch tick data globally for all checks to ensure consistency
                 tick = client.get_tick(config.SYMBOL)
                 if tick is None:
+                    if time.time() - last_heartbeat > 10: # Log warning every 10s if tick missing
+                        logger.warning(f"Waiting for tick data for {config.SYMBOL}... (Market might be closed or symbol not in Market Watch)")
                     time.sleep(1)
                     continue
 

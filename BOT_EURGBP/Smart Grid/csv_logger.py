@@ -26,7 +26,7 @@ class CSVLogger:
                             "Drawdown_Percent", "Balance", "Equity", "Notes"
                         ])
                 except Exception as e:
-                    pass
+                    print(f"Error initializing CSV file: {e}")
 
     def log_event(self, action, side="", price=0.0, rsi=None, atr=None, ema=None, 
                   grid_level=None, distance_moved=None, required_distance=None, lot_size=None, 
@@ -59,4 +59,4 @@ class CSVLogger:
                     writer = csv.writer(f)
                     writer.writerow(row)
             except Exception as e:
-                pass
+                print(f"Error logging to CSV: {e}")
