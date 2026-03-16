@@ -14,7 +14,7 @@ class CSVLogger:
         project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
         self.log_dir = os.path.join(project_root, "Log_HistoryOrder", "Analytics_Data")
         os.makedirs(self.log_dir, exist_ok=True)
-        self.filepath = os.path.join(self.log_dir, f"{self.symbol}_Analytics.csv")
+        self.filepath = os.path.join(self.log_dir, f"{self.symbol}_Sniper_Analytics.csv")
         self._init_file()
 
     def _init_file(self):

@@ -20,7 +20,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
 log_dir = os.path.join(project_root, "Log_HistoryOrder", "Text_Logs")
 os.makedirs(log_dir, exist_ok=True)
-log_filename = os.path.join(log_dir, f"{config.SYMBOL}_bot.log")
+log_filename = os.path.join(log_dir, f"{config.SYMBOL}_Sniper_bot.log")
 
 file_handler = TimedRotatingFileHandler(log_filename, when="midnight", interval=1, backupCount=7, encoding='utf-8')
 file_handler.setLevel(logging.INFO)
