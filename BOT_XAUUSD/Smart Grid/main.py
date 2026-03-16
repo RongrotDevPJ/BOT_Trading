@@ -11,7 +11,11 @@ from time_filter import TimeFilterClient
 import config
 
 # Setup Logging
-log_dir = r"C:\Users\t-rongrot.but\Desktop\BOT_Trading\Log_HistoryOrder\Text_Logs"
+# Get the root directory of the project (BOT_Trading)
+# __file__ is BOT_Trading\BOT_XAUUSD\Smart Grid\main.py
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
+log_dir = os.path.join(project_root, "Log_HistoryOrder", "Text_Logs")
 os.makedirs(log_dir, exist_ok=True)
 log_filename = os.path.join(log_dir, f"{config.SYMBOL}_bot.log")
 

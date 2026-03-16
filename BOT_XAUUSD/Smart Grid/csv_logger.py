@@ -8,7 +8,11 @@ class CSVLogger:
     
     def __init__(self, symbol):
         self.symbol = symbol
-        self.log_dir = r"C:\Users\t-rongrot.but\Desktop\BOT_Trading\Log_HistoryOrder\Analytics_Data"
+        # Get the root directory of the project (BOT_Trading)
+        # __file__ is BOT_Trading\BOT_XAUUSD\Smart Grid\csv_logger.py
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
+        self.log_dir = os.path.join(project_root, "Log_HistoryOrder", "Analytics_Data")
         os.makedirs(self.log_dir, exist_ok=True)
         self.filepath = os.path.join(self.log_dir, f"{self.symbol}_Analytics.csv")
         self._init_file()
