@@ -97,14 +97,6 @@ def render_dashboard(
     if len(log_message) > 45:
         log_message = log_message[:42] + "..."
 
-    # Column alignment helper (Colon at Column 12)
-    def fmt_line(label, value):
-        return f"{label:<11}: {value}"
-
-    header = f"================ [ {symbol} ] {dt_str} ================"
-    
-    print(header)
-    
     # Build Profit and Target strings (Compact)
     profit_str = f"{daily_profit_pct:+.2f}%"
     if profit_amount is not None:
@@ -126,7 +118,6 @@ def render_dashboard(
         return f"{label:<10}: {value}"
 
     header = f"================ [ {symbol} ] {dt_str} ================"
-    
     print(header)
     
     # Compact EQUITY and BALANCE lines to prevent wrap
