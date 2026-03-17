@@ -76,6 +76,38 @@ class MT5Client:
     def get_account_info(self):
         """Gets account information (equity, balance, etc)"""
         return ag.account_info()
+
+    def get_open_positions(self, symbol=None, magic=None):
+        """Gets currently open positions, optionally filtered by symbol and magic number."""
+        if symbol:
+            positions = ag.positions_get(symbol=symbol)
+        else:
+            positions = ag.positions_get()
+            
+        if positions is None:
+            return []
+            
+        if magic is not None:
+            return [p for p in positions if p.magic == magic]
+        return list(positions)
+
+    def get_history_deals(self, symbol=None, magic=None, days=0):
+        """Gets history deals (closed trades) for a specific period, filtered by symbol and magic."""
+        from_date = datetime.datetime.now() - datetime.timedelta(days=days)
+        from_date = from_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # metaquotes history_deals_get needs datetime or timestamp
+        deals = ag.history_deals_get(from_date, datetime.datetime.now())
+        if deals is None:
+            return []
+            
+        filtered_deals = list(deals)
+        if symbol:
+            filtered_deals = [d for d in filtered_deals if d.symbol == symbol]
+        if magic is not None:
+            filtered_deals = [d for d in filtered_deals if d.magic == magic]
+            
+        return filtered_deals
         
     def shutdown(self):
          """Shuts down MT5 connection."""

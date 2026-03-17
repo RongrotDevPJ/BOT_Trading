@@ -82,8 +82,11 @@ def main():
     cached_balance = 0
     cached_daily_profit_pct = 0
     cached_daily_profit_amount = 0
+    cached_acc_profit_amount = 0
+    cached_acc_profit_pct = 0
     cached_target_amount = 0
     cached_drawdown_pct = 0
+    cached_acc_drawdown_pct = 0
 
     try:
         while True:
@@ -104,12 +107,31 @@ def main():
                 if account_info:
                     cached_equity = account_info.equity
                     cached_balance = account_info.balance
+                    
+                    # 1. Global (for Target and Total display)
                     if start_of_day_equity and start_of_day_equity > 0:
-                        cached_daily_profit_pct = ((cached_equity - start_of_day_equity) / start_of_day_equity) * 100
-                        cached_daily_profit_amount = cached_equity - start_of_day_equity
                         cached_target_amount = start_of_day_equity * (getattr(config, 'DAILY_TARGET_PERCENT', 15.0) / 100.0)
+                        cached_acc_profit_amount = cached_equity - start_of_day_equity
+                        cached_acc_profit_pct = (cached_acc_profit_amount / start_of_day_equity) * 100
+                    
                     if cached_balance > 0:
-                        cached_drawdown_pct = ((cached_balance - cached_equity) / cached_balance) * 100
+                        cached_acc_drawdown_pct = ((cached_balance - cached_equity) / cached_balance) * 100
+
+                    # 2. Symbol-specific (for Detailed Display)
+                    deals = client.get_history_deals(symbol=config.SYMBOL, magic=config.MAGIC_NUMBER, days=0)
+                    symbol_realized_profit = sum(d.profit + d.commission + d.swap for d in deals)
+                    
+                    open_pos = client.get_open_positions(symbol=config.SYMBOL, magic=config.MAGIC_NUMBER)
+                    symbol_floating_profit = sum(p.profit for p in open_pos)
+                    
+                    cached_daily_profit_amount = symbol_realized_profit + symbol_floating_profit
+                    if start_of_day_equity and start_of_day_equity > 0:
+                        cached_daily_profit_pct = (cached_daily_profit_amount / start_of_day_equity) * 100
+                    
+                    # Symbol-specific Drawdown (Current floating loss of this bot)
+                    symbol_floating_loss = sum(p.profit for p in open_pos if p.profit < 0)
+                    if cached_balance > 0:
+                        cached_drawdown_pct = (abs(symbol_floating_loss) / cached_balance) * 100
                 last_ui_data_update = current_time
 
             # Get latest stats from strategy for the Stat Line
@@ -143,7 +165,10 @@ def main():
                 mt5_status=mt5_status,
                 target_pct=getattr(config, 'DAILY_TARGET_PERCENT', 15.0),
                 target_amount=cached_target_amount,
-                profit_amount=cached_daily_profit_amount
+                profit_amount=cached_daily_profit_amount,
+                acc_profit_pct=cached_acc_profit_pct,
+                acc_profit_amount=cached_acc_profit_amount,
+                acc_drawdown_pct=cached_acc_drawdown_pct
             )
                 
             # 2. Heartbeat logging

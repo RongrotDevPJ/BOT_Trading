@@ -47,7 +47,10 @@ def render_dashboard(
     mt5_status,
     target_pct=15.0,
     target_amount=None,
-    profit_amount=None
+    profit_amount=None,
+    acc_profit_pct=None,
+    acc_profit_amount=None,
+    acc_drawdown_pct=None
 ):
     """
     Renders a fixed-width dashboard to the terminal with anti-flicker and throttling.
@@ -111,8 +114,21 @@ def render_dashboard(
     if target_amount is not None:
         target_str += f" ({target_amount:.2f})"
 
-    print(fmt_line("EQUITY", f"{equity:.2f}      [ Target: {target_str} | Profit: {profit_str} ]"))
-    print(fmt_line("BALANCE", f"{balance:.2f}      [ Drawdown: {drawdown_pct:.2f}% ]"))
+    # Build Account Total Profit string
+    acc_profit_str = "N/A"
+    if acc_profit_pct is not None:
+        acc_profit_str = f"{acc_profit_pct:+.2f}%"
+        if acc_profit_amount is not None:
+            acc_profit_str += f" ({acc_profit_amount:+.2f})"
+
+    print(fmt_line("EQUITY", f"{equity:.2f}      [ Acc Target: {target_str} | Acc Profit: {acc_profit_str} ]"))
+    
+    # Balance Line with Bot Profit and combined Drawdown info
+    drawdown_str = f"Bot: {drawdown_pct:.2f}%"
+    if acc_drawdown_pct is not None:
+        drawdown_str += f" | Acc: {acc_drawdown_pct:.2f}%"
+
+    print(fmt_line("BALANCE", f"{balance:.2f}      [ Bot Profit: {profit_str} | Drawdown: {drawdown_str} ]"))
     print("-" * len(header))
     print(fmt_line("STRATEGY", strategy_name))
     print(fmt_line("STATISTICS", stat_line))
