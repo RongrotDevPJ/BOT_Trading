@@ -1,6 +1,7 @@
 import MetaTrader5 as ag
 import config
 import logging
+import datetime
 
 class MT5Client:
     def __init__(self):
@@ -93,7 +94,6 @@ class MT5Client:
 
     def get_history_deals(self, symbol=None, magic=None, days=0):
         """Gets history deals (closed trades) for a specific period, filtered by symbol and magic."""
-        import datetime
         from_date = datetime.datetime.now() - datetime.timedelta(days=days)
         from_date = from_date.replace(hour=0, minute=0, second=0, microsecond=0)
         
