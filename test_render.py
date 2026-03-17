@@ -22,7 +22,10 @@ for i in range(10):
         news_status="STABLE",
         log_time="12:00:00",
         log_message=f"Test message {i}",
-        mt5_status="CONNECTED"
+        mt5_status="CONNECTED",
+        target_pct=15.0,
+        target_amount=150.0,
+        profit_amount=10.0 + i
     )
     time.sleep(0.5) # Should only render every 4th loop (approx)
 

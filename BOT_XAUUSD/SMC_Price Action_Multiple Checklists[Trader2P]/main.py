@@ -70,6 +70,8 @@ def main():
     cached_equity = 0
     cached_balance = 0
     cached_daily_profit_pct = 0
+    cached_daily_profit_amount = 0
+    cached_target_amount = 0
     cached_drawdown_pct = 0
     # Track start of day for profit calculation
     start_of_day_equity = client.get_account_info().equity if client.is_connected() else 0
@@ -114,6 +116,8 @@ def main():
                     cached_balance = account_info.balance
                     if start_of_day_equity and start_of_day_equity > 0:
                         cached_daily_profit_pct = ((cached_equity - start_of_day_equity) / start_of_day_equity) * 100
+                        cached_daily_profit_amount = cached_equity - start_of_day_equity
+                        cached_target_amount = start_of_day_equity * (getattr(config, 'DAILY_TARGET_PERCENT', 15.0) / 100.0)
                     if cached_balance > 0:
                         cached_drawdown_pct = ((cached_balance - cached_equity) / cached_balance) * 100
                 last_ui_data_update = current_time
@@ -160,7 +164,9 @@ def main():
                 log_time=latest_log_handler.latest_time,
                 log_message=latest_log_handler.latest_msg,
                 mt5_status=mt5_status,
-                target_pct=getattr(config, 'DAILY_TARGET_PERCENT', 15.0)
+                target_pct=getattr(config, 'DAILY_TARGET_PERCENT', 15.0),
+                target_amount=cached_target_amount,
+                profit_amount=cached_daily_profit_amount
             )
 
             # 2. Heartbeat

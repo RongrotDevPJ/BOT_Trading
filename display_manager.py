@@ -45,7 +45,9 @@ def render_dashboard(
     log_time, 
     log_message, 
     mt5_status,
-    target_pct=15.0
+    target_pct=15.0,
+    target_amount=None,
+    profit_amount=None
 ):
     """
     Renders a fixed-width dashboard to the terminal with anti-flicker and throttling.
@@ -99,7 +101,17 @@ def render_dashboard(
     header = f"================ [ {symbol} ] {dt_str} ================"
     
     print(header)
-    print(fmt_line("EQUITY", f"{equity:.2f}      [ Target: {target_pct}% | Profit: {daily_profit_pct:+.2f}% ]"))
+    
+    # Build Profit and Target strings with amounts if present
+    profit_str = f"{daily_profit_pct:+.2f}%"
+    if profit_amount is not None:
+        profit_str += f" ({profit_amount:+.2f})"
+        
+    target_str = f"{target_pct}%"
+    if target_amount is not None:
+        target_str += f" ({target_amount:.2f})"
+
+    print(fmt_line("EQUITY", f"{equity:.2f}      [ Target: {target_str} | Profit: {profit_str} ]"))
     print(fmt_line("BALANCE", f"{balance:.2f}      [ Drawdown: {drawdown_pct:.2f}% ]"))
     print("-" * len(header))
     print(fmt_line("STRATEGY", strategy_name))
