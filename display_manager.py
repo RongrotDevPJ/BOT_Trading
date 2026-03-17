@@ -105,30 +105,40 @@ def render_dashboard(
     
     print(header)
     
-    # Build Profit and Target strings with amounts if present
+    # Build Profit and Target strings (Compact)
     profit_str = f"{daily_profit_pct:+.2f}%"
     if profit_amount is not None:
-        profit_str += f" ({profit_amount:+.2f})"
+        profit_str += f"({profit_amount:+.2f})"
         
     target_str = f"{target_pct}%"
     if target_amount is not None:
-        target_str += f" ({target_amount:.2f})"
+        target_str += f"({target_amount:.1f})"
 
-    # Build Account Total Profit string
+    # Build Account Total Profit string (Compact)
     acc_profit_str = "N/A"
     if acc_profit_pct is not None:
         acc_profit_str = f"{acc_profit_pct:+.2f}%"
         if acc_profit_amount is not None:
-            acc_profit_str += f" ({acc_profit_amount:+.2f})"
+            acc_profit_str += f"({acc_profit_amount:+.2f})"
 
-    print(fmt_line("EQUITY", f"{equity:.2f}      [ Acc Target: {target_str} | Acc Profit: {acc_profit_str} ]"))
+    # Column alignment helper (Strict)
+    def fmt_line(label, value):
+        return f"{label:<10}: {value}"
+
+    header = f"================ [ {symbol} ] {dt_str} ================"
     
-    # Balance Line with Bot Profit and combined Drawdown info
-    drawdown_str = f"Bot: {drawdown_pct:.2f}%"
+    print(header)
+    
+    # Compact EQUITY and BALANCE lines to prevent wrap
+    equity_info = f"[ Tgt:{target_str} | AccPL:{acc_profit_str} ]"
+    print(fmt_line("EQUITY", f"{equity:.2f} {equity_info}"))
+    
+    dd_str = f"Bot:{drawdown_pct:.1f}%"
     if acc_drawdown_pct is not None:
-        drawdown_str += f" | Acc: {acc_drawdown_pct:.2f}%"
+        dd_str += f"|Acc:{acc_drawdown_pct:.1f}%"
 
-    print(fmt_line("BALANCE", f"{balance:.2f}      [ Bot Profit: {profit_str} | Drawdown: {drawdown_str} ]"))
+    balance_info = f"[ BotPL:{profit_str} | DD:{dd_str} ]"
+    print(fmt_line("BALANCE", f"{balance:.2f} {balance_info}"))
     print("-" * len(header))
     print(fmt_line("STRATEGY", strategy_name))
     print(fmt_line("STATISTICS", stat_line))
