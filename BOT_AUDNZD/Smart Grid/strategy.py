@@ -139,14 +139,16 @@ class SmartGridStrategy:
         if is_rsi_buy and is_trend_buy:
             trend_str = f"| Price({tick.ask:.5f}) > EMA({current_ema:.5f})" if enable_trend else "(Trend Filter OFF)"
             self.logger.info(f"✨ [Analysis] Initial BUY Entry Triggered: RSI={current_rsi:.2f} <= {config.RSI_BUY_LEVEL} {trend_str}")
-            executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, config.START_LOT, tick.ask)
-            self.csv_logger.log_event(action="Initial Entry", side="BUY", price=tick.ask, rsi=current_rsi, ema=current_ema, lot_size=config.START_LOT)
+            result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, config.START_LOT, tick.ask)
+            if result:
+                self.csv_logger.log_event(action="Initial Entry", side="BUY", price=tick.ask, rsi=current_rsi, ema=current_ema, lot_size=config.START_LOT)
             
         elif is_rsi_sell and is_trend_sell:
             trend_str = f"| Price({tick.bid:.5f}) < EMA({current_ema:.5f})" if enable_trend else "(Trend Filter OFF)"
             self.logger.info(f"✨ [Analysis] Initial SELL Entry Triggered: RSI={current_rsi:.2f} >= {config.RSI_SELL_LEVEL} {trend_str}")
-            executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, config.START_LOT, tick.bid)
-            self.csv_logger.log_event(action="Initial Entry", side="SELL", price=tick.bid, rsi=current_rsi, ema=current_ema, lot_size=config.START_LOT)
+            result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, config.START_LOT, tick.bid)
+            if result:
+                self.csv_logger.log_event(action="Initial Entry", side="SELL", price=tick.bid, rsi=current_rsi, ema=current_ema, lot_size=config.START_LOT)
 
     def get_dynamic_grid_distance(self, num_positions, current_atr):
          """Calculates distance based on Base ATR distance and smart step dynamic multipliers."""
@@ -286,12 +288,12 @@ class SmartGridStrategy:
             if self.needs_new_grid_level(buy_positions, current_ask, side=0, current_atr=current_atr, current_ema=current_ema):
                 dynamic_lot = self.get_dynamic_lot(len(buy_positions))
                 self.logger.info(f"🛒 Executing BUY Grid. Level: {len(buy_positions)+1}, Lot: {dynamic_lot}")
-                executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, dynamic_lot, current_ask)
-                
-                latest_p = max(buy_positions, key=lambda p: p.time)
-                dist_moved = abs(current_ask - latest_p.price_open) / ag.symbol_info(config.SYMBOL).point
-                req_dist = self.get_dynamic_grid_distance(len(buy_positions), current_atr)
-                self.csv_logger.log_event(action="Grid Open", side="BUY", price=current_ask, atr=current_atr, ema=current_ema, grid_level=len(buy_positions)+1, lot_size=dynamic_lot, distance_moved=dist_moved, required_distance=req_dist)
+                result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, dynamic_lot, current_ask)
+                if result:
+                    latest_p = max(buy_positions, key=lambda p: p.time)
+                    dist_moved = abs(current_ask - latest_p.price_open) / ag.symbol_info(config.SYMBOL).point
+                    req_dist = self.get_dynamic_grid_distance(len(buy_positions), current_atr)
+                    self.csv_logger.log_event(action="Grid Open", side="BUY", price=current_ask, atr=current_atr, ema=current_ema, grid_level=len(buy_positions)+1, lot_size=dynamic_lot, distance_moved=dist_moved, required_distance=req_dist)
                 
             if not config.USE_TRAILING_STOP:
                 new_tp = self.calculate_basket_tp(buy_positions, side=0)
@@ -302,12 +304,12 @@ class SmartGridStrategy:
              if self.needs_new_grid_level(sell_positions, current_bid, side=1, current_atr=current_atr, current_ema=current_ema):
                  dynamic_lot = self.get_dynamic_lot(len(sell_positions))
                  self.logger.info(f"🛒 Executing SELL Grid. Level: {len(sell_positions)+1}, Lot: {dynamic_lot}")
-                 executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, dynamic_lot, current_bid)
-                 
-                 latest_p = max(sell_positions, key=lambda p: p.time)
-                 dist_moved = abs(current_bid - latest_p.price_open) / ag.symbol_info(config.SYMBOL).point
-                 req_dist = self.get_dynamic_grid_distance(len(sell_positions), current_atr)
-                 self.csv_logger.log_event(action="Grid Open", side="SELL", price=current_bid, atr=current_atr, ema=current_ema, grid_level=len(sell_positions)+1, lot_size=dynamic_lot, distance_moved=dist_moved, required_distance=req_dist)
+                 result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, dynamic_lot, current_bid)
+                 if result:
+                     latest_p = max(sell_positions, key=lambda p: p.time)
+                     dist_moved = abs(current_bid - latest_p.price_open) / ag.symbol_info(config.SYMBOL).point
+                     req_dist = self.get_dynamic_grid_distance(len(sell_positions), current_atr)
+                     self.csv_logger.log_event(action="Grid Open", side="SELL", price=current_bid, atr=current_atr, ema=current_ema, grid_level=len(sell_positions)+1, lot_size=dynamic_lot, distance_moved=dist_moved, required_distance=req_dist)
                  
              if not config.USE_TRAILING_STOP:
                  new_tp = self.calculate_basket_tp(sell_positions, side=1)
