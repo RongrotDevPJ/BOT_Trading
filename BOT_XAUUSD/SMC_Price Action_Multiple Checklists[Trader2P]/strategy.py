@@ -2,8 +2,15 @@ import logging
 import config
 import datetime
 from market_analyzer import MarketAnalyzer
-from indicator import IndicatorClient
-from csv_logger import CSVLogger
+import sys
+from pathlib import Path
+# Add project root to path for shared_utils
+project_root = Path(__file__).resolve().parent.parent.parent
+if str(project_root) not in sys.path:
+    sys.path.append(str(project_root))
+
+from shared_utils.csv_logger import CSVLogger
+from shared_utils.indicator import IndicatorClient
 
 class SMCSniperStrategy:
     def __init__(self, mt5_client):

@@ -4,7 +4,7 @@ import time
 
 # Add current dir to path
 sys.path.append(os.getcwd())
-from display_manager import render_dashboard
+from shared_utils.display_manager import render_dashboard
 
 print("Testing Dashboard Throttling and ANSI Escape codes...")
 for i in range(10):

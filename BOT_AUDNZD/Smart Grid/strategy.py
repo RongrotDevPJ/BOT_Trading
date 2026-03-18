@@ -1,8 +1,15 @@
+import sys
+from pathlib import Path
 import logging
 import time
 import MetaTrader5 as ag
 import config
-from csv_logger import CSVLogger
+# Add project root to path for shared_utils
+project_root = Path(__file__).resolve().parent.parent.parent
+if str(project_root) not in sys.path:
+    sys.path.append(str(project_root))
+
+from shared_utils.csv_logger import CSVLogger
 
 class SmartGridStrategy:
     def __init__(self):
@@ -141,14 +148,14 @@ class SmartGridStrategy:
             self.logger.info(f"✨ [Analysis] Initial BUY Entry Triggered: RSI={current_rsi:.2f} <= {config.RSI_BUY_LEVEL} {trend_str}")
             result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, config.START_LOT, tick.ask)
             if result:
-                self.csv_logger.log_event(action="Initial Entry", side="BUY", price=tick.ask, rsi=current_rsi, ema=current_ema, lot_size=config.START_LOT)
+                self.csv_logger.log_event(action="Initial Entry", side="BUY", price=tick.ask, rsi=current_rsi, ema=current_ema, lot_size=config.START_LOT, ticket=result.order)
             
         elif is_rsi_sell and is_trend_sell:
             trend_str = f"| Price({tick.bid:.5f}) < EMA({current_ema:.5f})" if enable_trend else "(Trend Filter OFF)"
             self.logger.info(f"✨ [Analysis] Initial SELL Entry Triggered: RSI={current_rsi:.2f} >= {config.RSI_SELL_LEVEL} {trend_str}")
             result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, config.START_LOT, tick.bid)
             if result:
-                self.csv_logger.log_event(action="Initial Entry", side="SELL", price=tick.bid, rsi=current_rsi, ema=current_ema, lot_size=config.START_LOT)
+                self.csv_logger.log_event(action="Initial Entry", side="SELL", price=tick.bid, rsi=current_rsi, ema=current_ema, lot_size=config.START_LOT, ticket=result.order)
 
     def get_dynamic_grid_distance(self, num_positions, current_atr):
          """Calculates distance based on Base ATR distance and smart step dynamic multipliers."""
@@ -293,7 +300,7 @@ class SmartGridStrategy:
                     latest_p = max(buy_positions, key=lambda p: p.time)
                     dist_moved = abs(current_ask - latest_p.price_open) / ag.symbol_info(config.SYMBOL).point
                     req_dist = self.get_dynamic_grid_distance(len(buy_positions), current_atr)
-                    self.csv_logger.log_event(action="Grid Open", side="BUY", price=current_ask, atr=current_atr, ema=current_ema, grid_level=len(buy_positions)+1, lot_size=dynamic_lot, distance_moved=dist_moved, required_distance=req_dist)
+                    self.csv_logger.log_event(action="Grid Open", side="BUY", price=current_ask, atr=current_atr, ema=current_ema, grid_level=len(buy_positions)+1, lot_size=dynamic_lot, distance_moved=dist_moved, required_distance=req_dist, ticket=result.order)
                 
             if not config.USE_TRAILING_STOP:
                 new_tp = self.calculate_basket_tp(buy_positions, side=0)
@@ -309,7 +316,7 @@ class SmartGridStrategy:
                      latest_p = max(sell_positions, key=lambda p: p.time)
                      dist_moved = abs(current_bid - latest_p.price_open) / ag.symbol_info(config.SYMBOL).point
                      req_dist = self.get_dynamic_grid_distance(len(sell_positions), current_atr)
-                     self.csv_logger.log_event(action="Grid Open", side="SELL", price=current_bid, atr=current_atr, ema=current_ema, grid_level=len(sell_positions)+1, lot_size=dynamic_lot, distance_moved=dist_moved, required_distance=req_dist)
+                     self.csv_logger.log_event(action="Grid Open", side="SELL", price=current_bid, atr=current_atr, ema=current_ema, grid_level=len(sell_positions)+1, lot_size=dynamic_lot, distance_moved=dist_moved, required_distance=req_dist, ticket=result.order)
                  
              if not config.USE_TRAILING_STOP:
                  new_tp = self.calculate_basket_tp(sell_positions, side=1)

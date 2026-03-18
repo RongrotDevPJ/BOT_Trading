@@ -1,30 +1,30 @@
-import os
-import time
+import sys
+from pathlib import Path
 import logging
 from logging.handlers import TimedRotatingFileHandler
-import datetime
-from mt5_client import MT5Client
-from execution import TradeExecutor
-from strategy import SmartGridStrategy
-from indicator import IndicatorClient
-from time_filter import TimeFilterClient
 import config
-import sys
-# Add project root to path for display_manager
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
-if project_root not in sys.path:
-    sys.path.append(project_root)
-from display_manager import render_dashboard
+import time
+import datetime
+
+# Add project root to path for shared_utils and display_manager
+current_dir = Path(__file__).resolve().parent
+project_root = current_dir.parent.parent
+if str(project_root) not in sys.path:
+    sys.path.append(str(project_root))
+
+from shared_utils.mt5_client import MT5Client
+from shared_utils.execution import TradeExecutor
+from shared_utils.indicator import IndicatorClient
+from shared_utils.time_filter import TimeFilterClient
+from shared_utils.display_manager import render_dashboard
+from strategy import SmartGridStrategy
 
 # Setup Logging
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
-log_dir = os.path.join(project_root, "Log_HistoryOrder", "Text_Logs")
-os.makedirs(log_dir, exist_ok=True)
-log_filename = os.path.join(log_dir, f"{config.SYMBOL}_bot.log")
+log_dir = project_root / "Log_HistoryOrder" / "Text_Logs"
+log_dir.mkdir(parents=True, exist_ok=True)
+log_filename = log_dir / f"{config.SYMBOL}_bot.log"
 
-file_handler = TimedRotatingFileHandler(log_filename, when="midnight", interval=1, backupCount=7, encoding='utf-8')
+file_handler = TimedRotatingFileHandler(str(log_filename), when="midnight", interval=1, backupCount=7, encoding='utf-8')
 file_handler.setLevel(logging.INFO)
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.WARNING)
@@ -53,7 +53,7 @@ logger.addHandler(latest_log_handler)
 
 def main():
     logger.info("Starting Smart Grid MT5 Bot...")
-    logger.info(f"CSV Logging initialized at: C:\\Users\\t-rongrot.but\\Desktop\\BOT_Trading\\Log_HistoryOrder\\Analytics_Data")
+    logger.info(f"CSV Logging initialized at: {project_root / 'Log_HistoryOrder' / 'Analytics_Data'}")
 
     client = MT5Client()
     executor = TradeExecutor(client)
@@ -117,6 +117,8 @@ def main():
 
                     # 2. Symbol-specific (for Detailed Display)
                     deals = client.get_history_deals(symbol=config.SYMBOL, magic=config.MAGIC_NUMBER, days=0)
+                    # Sync deals to SQLite for accurate persistent history
+                    strategy.csv_logger.db_manager.sync_deals(deals)
                     symbol_realized_profit = sum(d.profit + d.commission + d.swap for d in deals)
                     
                     open_pos = client.get_open_positions(symbol=config.SYMBOL, magic=config.MAGIC_NUMBER)

@@ -17,3 +17,6 @@ env/
 
 # MacOS
 .DS_Store
+
+# Trading Data and Logs
+Log_HistoryOrder/

@@ -5,6 +5,17 @@ try:
     import psutil
 except ImportError:
     psutil = None
+import config
+from shared_utils.db_manager import DBManager
+
+def get_system_stats():
+    # Return stats using global psutil
+    try:
+        cpu = psutil.cpu_percent()
+        ram = int(psutil.virtual_memory().used / (1024 * 1024))
+        return cpu, ram
+    except Exception:
+        return "N/A", "N/A"
 
 # Try to enable ANSI support on Windows using ctypes
 _ansi_supported = False
@@ -63,6 +74,22 @@ def render_dashboard(
         return
     
     _last_render_time = current_time
+
+    try:
+        # Initialize DB Manager for summary data
+        db = DBManager()
+        daily_profit_usd = db.get_today_summary(symbol)
+        
+        # Calculate daily_profit_pct based on actual closed trades
+        # If no trades yet, fallback to 0.0 or the provided value
+        if daily_profit_usd != 0 and balance > 0:
+            daily_profit_pct = (daily_profit_usd / (balance - daily_profit_usd)) * 100
+        else:
+            daily_profit_pct = 0.0
+    except Exception as e:
+        # Handle DB errors gracefully, perhaps log them
+        print(f"Error fetching daily summary: {e}")
+        # Keep the original daily_profit_pct if DB fetch fails
 
     # Priority 1: Mandatory clear for Windows (reliable for VPS/Legacy terminals)
     if os.name == 'nt':

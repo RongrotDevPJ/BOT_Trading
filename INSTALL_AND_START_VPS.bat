@@ -3,13 +3,13 @@ setlocal
 cd /d "%~dp0"
 
 echo ========================================================
-2: rem  VPS One-Click Setup and Launch
+rem  VPS One-Click Setup and Launch
 echo ========================================================
 echo.
 
 echo [1/2] Installing Python dependencies...
 python -m pip install --upgrade pip
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 
 if %ERRORLEVEL% NEQ 0 (
     echo.

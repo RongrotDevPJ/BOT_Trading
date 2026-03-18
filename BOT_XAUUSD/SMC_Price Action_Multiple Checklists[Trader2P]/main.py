@@ -3,17 +3,27 @@ import time
 import logging
 from logging.handlers import TimedRotatingFileHandler
 import datetime
-from mt5_client import MT5Client
-from execution import TradeExecutor
-from strategy import SMCSniperStrategy
 import config
 import sys
-# Add project root to path for display_manager
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
-if project_root not in sys.path:
-    sys.path.append(project_root)
-from display_manager import render_dashboard
+from pathlib import Path
+import logging
+from logging.handlers import TimedRotatingFileHandler
+import config
+import time
+import datetime
+
+# Add project root to path for shared_utils and display_manager
+current_dir = Path(__file__).resolve().parent
+project_root = current_dir.parent.parent
+if str(project_root) not in sys.path:
+    sys.path.append(str(project_root))
+
+from shared_utils.mt5_client import MT5Client
+from shared_utils.execution import TradeExecutor
+from shared_utils.indicator import IndicatorClient
+from shared_utils.time_filter import TimeFilterClient
+from shared_utils.display_manager import render_dashboard
+from strategy import SMCSniperStrategy
 
 # Setup Logging
 current_dir = os.path.dirname(os.path.abspath(__file__))
