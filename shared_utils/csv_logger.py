@@ -27,7 +27,7 @@ class CSVLogger:
                     with open(self.filepath, mode='w', newline='', encoding='utf-8') as f:
                         writer = csv.writer(f)
                         writer.writerow([
-                            "Timestamp", "Action", "Symbol", "Side", "Price", 
+                            "Timestamp", "Action", "Symbol", "Side", "Price", "Spread", 
                             "RSI", "ATR", "EMA", "GridLevel", 
                             "DistanceMoved", "RequiredDistance", "LotSize", 
                             "Drawdown_Percent", "Balance", "Equity", "Notes"
@@ -35,7 +35,7 @@ class CSVLogger:
                 except Exception as e:
                     print(f"Error initializing CSV file: {e}")
 
-    def log_event(self, action, side="", price=0.0, rsi=None, atr=None, ema=None, 
+    def log_event(self, action, side="", price=0.0, spread=None, rsi=None, atr=None, ema=None, 
                   grid_level=None, distance_moved=None, required_distance=None, lot_size=None, 
                   drawdown=None, balance=None, equity=None, profit=None, notes="", ticket=None):
         
@@ -46,6 +46,7 @@ class CSVLogger:
             row = [
                 timestamp, action, self.symbol, side,
                 f"{price:.5f}" if price else "",
+                f"{spread}" if spread is not None else "",
                 f"{rsi:.2f}" if rsi is not None else "",
                 f"{atr:.5f}" if atr is not None else "",
                 f"{ema:.5f}" if ema is not None else "",

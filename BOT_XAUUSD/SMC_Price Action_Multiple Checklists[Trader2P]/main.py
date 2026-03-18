@@ -178,7 +178,7 @@ def main():
             # Guard values
             symbol_info = client.get_symbol_info(config.SYMBOL)
             current_spread = int((tick.ask - tick.bid) / symbol_info.point) if tick and symbol_info else 0
-            max_spread = getattr(config, 'MAX_SPREAD', 0)
+            max_spread = getattr(config, 'MAX_ALLOWED_SPREAD', 0)
             news_status = "STABLE"
 
             # Render Dashboard
