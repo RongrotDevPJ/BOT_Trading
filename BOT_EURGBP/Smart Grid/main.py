@@ -1,16 +1,18 @@
 import sys
 from pathlib import Path
+
+# Add project root to path for shared_utils and strategy imports
+# Structure: [Root]/BOT_XXXXX/Smart Grid/main.py (3 levels deep from root)
+current_file = Path(__file__).resolve()
+project_root = current_file.parents[2] 
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 import logging
 from logging.handlers import TimedRotatingFileHandler
-import config
 import time
 import datetime
-
-# Add project root to path for shared_utils and display_manager
-current_dir = Path(__file__).resolve().parent
-project_root = current_dir.parent.parent
-if str(project_root) not in sys.path:
-    sys.path.append(str(project_root))
+import config 
 
 from shared_utils.mt5_client import MT5Client
 from shared_utils.execution import TradeExecutor
@@ -18,7 +20,6 @@ from shared_utils.indicator import IndicatorClient
 from shared_utils.time_filter import TimeFilterClient
 from shared_utils.display_manager import render_dashboard
 from strategy import SmartGridStrategy
-import config # Assuming config is imported somewhere, adding it here for completeness if it's missing.
 
 # Setup Logging
 log_dir = project_root / "Log_HistoryOrder" / "Text_Logs"
