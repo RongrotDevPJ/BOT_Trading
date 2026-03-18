@@ -1,27 +1,34 @@
 import logging
 import config
 import datetime
-from market_analyzer import MarketAnalyzer
 import sys
+import time
 from pathlib import Path
+
 # Add project root to path for shared_utils
 project_root = Path(__file__).resolve().parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
+from market_analyzer import MarketAnalyzer
 from shared_utils.csv_logger import CSVLogger
 from shared_utils.indicator import IndicatorClient
+import MetaTrader5 as ag
 
 class SMCSniperStrategy:
     def __init__(self, mt5_client):
         self.mt5_client = mt5_client
         self.analyzer = MarketAnalyzer(mt5_client)
         self.indicators = IndicatorClient()
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger("SMCSniper")
         self.csv_logger = CSVLogger(config.SYMBOL)
         
         self.last_bias = None
         self.last_checklist_log = {} # To prevent log spam
+
+    def get_positions(self):
+        """Gets all open positions managed by this bot."""
+        return self.mt5_client.get_open_positions(symbol=config.SYMBOL, magic=config.MAGIC_NUMBER)
 
     def log_checklist(self, key, status):
         """Logs checklist status only if it changes."""
@@ -38,65 +45,35 @@ class SMCSniperStrategy:
         
         # Bullish Engulfing
         if last['close'] > prev['open'] and prev['close'] < prev['open'] and last['close'] > last['open']:
-            return "BULL_ENGULFING"
-            
+            return "BULLISH_ENGULFING"
         # Bearish Engulfing
         if last['close'] < prev['open'] and prev['close'] > prev['open'] and last['close'] < last['open']:
-            return "BEAR_ENGULFING"
-            
-        # Simple Pin Bar detection
-        body_size = abs(last['close'] - last['open'])
-        candle_range = last['high'] - last['low']
-        if candle_range == 0: return None
-        
-        upper_wick = last['high'] - max(last['close'], last['open'])
-        lower_wick = min(last['close'], last['open']) - last['low']
-        
-        if lower_wick > body_size * 2 and upper_wick < body_size:
-            return "BULL_PINBAR"
-        if upper_wick > body_size * 2 and lower_wick < body_size:
-            return "BEAR_PINBAR"
+            return "BEARISH_ENGULFING"
             
         return None
 
     def calculate_lot_size(self, balance, sl_points):
-        """Calculates lot size based on % risk, SL distance, and broker limits."""
-        if sl_points <= 0: return 0.01
+        """Calculates lot size based on fixed risk percentage."""
+        if sl_points <= 0: return config.MIN_LOT
         
-        symbol_info = ag.symbol_info(config.SYMBOL)
-        if not symbol_info: return 0.01
+        risk_amount = balance * (config.RISK_PER_TRADE / 100.0)
+        point_value = ag.symbol_info(config.SYMBOL).trade_tick_value
         
-        risk_amount = balance * (config.RISK_PERCENT / 100.0)
+        if point_value == 0: return config.MIN_LOT
         
-        # XAUUSD lot calculation: 
-        # Risk = Lot * SL_Points * TickValue * ContractSize
-        # So: Lot = Risk / (SL_Points * TickValue * ContractSize)
-        # Note: on many brokers for Gold, SL_Points is already handle by the point value.
-        tick_value = symbol_info.trade_tick_value
-        tick_size = symbol_info.trade_tick_size
+        lots = risk_amount / (sl_points * point_value)
+        lots = round(lots, 2)
         
-        if tick_size == 0 or sl_points == 0: return symbol_info.volume_min
-        
-        lot = risk_amount / (sl_points * tick_value / tick_size)
-        
-        # Round to nearest lot step
-        step = symbol_info.volume_step
-        lot = round(lot / step) * step
-        
-        # Bound by min/max
-        return round(max(symbol_info.volume_min, min(lot, symbol_info.volume_max)), 2)
+        return max(config.MIN_LOT, min(config.MAX_LOT, lots))
 
     def run_sniper_check(self, executor, tick):
-        """Main entry checklist loop."""
-        # 1. BIAS Alignment (H1)
+        """Main entry signal detection."""
+        # 1. HTF Bias (H1 BOS/CHoCH)
         h1_bias, h1_high, h1_low = self.analyzer.analyze_structure(config.SYMBOL, config.HTF_TIMEFRAME)
         self.log_checklist("H1 Bias", h1_bias)
+        self.last_bias = h1_bias
         
-        # Alert if bias changes
-        if h1_bias != self.last_bias:
-            self.last_bias = h1_bias
-
-        if h1_bias not in ["BULLISH", "BEARISH"]:
+        if h1_bias == "NEUTRAL":
             return
 
         # 2. Zone Detection (H1 OB)
@@ -119,6 +96,7 @@ class SMCSniperStrategy:
         if not active_ob:
             self.log_checklist("Zone", "Wait (No active OB)")
             return
+        self.log_checklist("In Zone", True)
         self.log_checklist("Zone", f"IN ZONE ({active_ob['type']})")
 
         # 3. Fibonacci Check
@@ -141,38 +119,46 @@ class SMCSniperStrategy:
 
     def execute_trade(self, side, tick, ob, executor):
         """Executes the trade with calculated SL/TP."""
-        balance = self.mt5_client.get_account_info().balance
+        account = self.mt5_client.get_account_info()
+        balance = account.balance if account else 0
         
         if side == "BUY":
+            order_type = ag.ORDER_TYPE_BUY
             price = tick.ask
             sl = ob['bottom'] - 1.0 # Buffer below OB
             tp = price + (price - sl) * config.MIN_RR_RATIO
         else:
+            order_type = ag.ORDER_TYPE_SELL
             price = tick.bid
             sl = ob['top'] + 1.0 # Buffer above OB
             tp = price - (sl - price) * config.MIN_RR_RATIO
             
-        sl_points = abs(price - sl)
+        sl_points_val = abs(price - sl)
+        point = ag.symbol_info(config.SYMBOL).point
+        sl_points = sl_points_val / point
+        
         lots = self.calculate_lot_size(balance, sl_points)
         
         self.logger.info(f"🚀 [SIGNAL] Executing {side} Sniper Trade! Lot: {lots}, SL: {sl:.2f}, TP: {tp:.2f}")
         
         # Check if already have a position to avoid double entry (simple filter)
-        if not executor.get_positions(config.SYMBOL):
-            executor.open_position(side, lots, price, sl, tp, "SMC Sniper")
-            self.csv_logger.log_event(action=f"ENTRY_{side}", price=price, lot=lots, sl=sl, tp=tp)
+        if not self.get_positions():
+            result = executor.send_order(config.SYMBOL, order_type, lots, price, sl, tp)
+            if result:
+                self.csv_logger.log_event(action=f"ENTRY_{side}", side=side, price=price, lot_size=lots, sl=sl, tp=tp, ticket=result.order, notes="Sniper Entry")
 
     def manage_trades(self, executor, tick):
         """Manages Breakeven and Trailing."""
-        positions = executor.get_positions(config.SYMBOL)
+        positions = self.get_positions()
         for pos in positions:
             # Breakeven Logic
-            if pos.magic == 999: # Simplified Magic check or comment
-                profit_points = pos.profit / (pos.volume * 10) # rough est
-                sl_dist = abs(pos.price_open - pos.sl)
-                
-                # If profit > 1R
-                if profit_points > sl_dist * config.BREAKEVEN_AT_R:
-                    if (pos.type == 0 and pos.sl < pos.price_open) or (pos.type == 1 and pos.sl > pos.price_open):
-                        self.logger.info(f"🛡️ [Breakeven] Moving SL to Entry for position {pos.ticket}")
-                        executor.modify_position(pos.ticket, pos.price_open, pos.tp)
+            # Since we only have one sniper position usually, magic check is enough
+            profit_points = pos.profit / (pos.volume * 10) # rough estimate for major pairs/gold
+            sl_dist = abs(pos.price_open - pos.sl)
+            
+            # If profit > 1R (or whatever config says)
+            if profit_points > sl_dist * getattr(config, 'BREAKEVEN_AT_R', 1.0):
+                if (pos.type == ag.ORDER_TYPE_BUY and pos.sl < pos.price_open) or \
+                   (pos.type == ag.ORDER_TYPE_SELL and pos.sl > pos.price_open):
+                    self.logger.info(f"🛡️ [Breakeven] Moving SL to Entry for position {pos.ticket}")
+                    executor.modify_sl(pos.ticket, config.SYMBOL, pos.price_open)

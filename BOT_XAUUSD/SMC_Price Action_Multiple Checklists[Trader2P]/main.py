@@ -26,11 +26,9 @@ from shared_utils.display_manager import render_dashboard
 from strategy import SMCSniperStrategy
 
 # Setup Logging
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
-log_dir = os.path.join(project_root, "Log_HistoryOrder", "Text_Logs")
-os.makedirs(log_dir, exist_ok=True)
-log_filename = os.path.join(log_dir, f"{config.SYMBOL}_Sniper_bot.log")
+log_dir = project_root / "Log_HistoryOrder" / "Text_Logs"
+log_dir.mkdir(parents=True, exist_ok=True)
+log_filename = log_dir / f"{config.SYMBOL}_Sniper_bot.log"
 
 file_handler = TimedRotatingFileHandler(log_filename, when="midnight", interval=1, backupCount=7, encoding='utf-8')
 file_handler.setLevel(logging.INFO)
@@ -139,6 +137,8 @@ def main():
 
                     # 2. Symbol-specific (for Detailed Display)
                     deals = client.get_history_deals(symbol=config.SYMBOL, magic=config.MAGIC_NUMBER, days=0)
+                    # Sync deals to SQLite
+                    strategy.csv_logger.db_manager.sync_deals(deals)
                     symbol_realized_profit = sum(d.profit + d.commission + d.swap for d in deals)
                     
                     open_pos = client.get_open_positions(symbol=config.SYMBOL, magic=config.MAGIC_NUMBER)
@@ -163,7 +163,7 @@ def main():
                     daily_target_reached = True
 
             if daily_target_reached:
-                positions = executor.get_positions(config.SYMBOL)
+                positions = strategy.get_positions()
                 if not positions:
                     # Target reached and all sniper positions closed -> Sleep
                     time.sleep(60)
