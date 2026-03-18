@@ -3,13 +3,13 @@ SYMBOL = "EURGBP"
 MAGIC_NUMBER = 555555 # Different from EURUSD
 
 # --- Trading Mode ---
-START_LOT = 0.05 # Base lot size for the first trade
+START_LOT = 0.10 # Base lot size for the first trade (Increased for higher profit)
 MAX_DEVIATION = 20 # Allow 100 points slippage for Gold volatility
 
 # --- Risk Management & Auto-Lot ---
 AUTO_LOT = True             # Enable dynamic lot sizing based on equity
-CENTS_PER_01_LOT = 1000     # Equity required per 0.01 lot step
-MIN_START_LOT = 0.05        # Minimum allowed base lot
+CENTS_PER_01_LOT = 500     # Equity required per 0.01 lot step (Decreased to increase lot size)
+MIN_START_LOT = 0.10        # Minimum allowed base lot
 MAX_START_LOT = 0.50        # Maximum allowed base lot
 
 # --- Smart Grid Settings ---
