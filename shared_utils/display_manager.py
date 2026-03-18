@@ -41,6 +41,14 @@ if os.name == 'nt':
 # Module-level variable to track last update time
 _last_render_time = 0
 _force_use_cls = False # User can set this to True for legacy behavior
+_db_manager = None # Cached DBManager instance
+
+def get_db():
+    """Lazily initializes and returns the DBManager instance."""
+    global _db_manager
+    if _db_manager is None:
+        _db_manager = DBManager()
+    return _db_manager
 
 def render_dashboard(
     symbol, 
@@ -76,8 +84,8 @@ def render_dashboard(
     _last_render_time = current_time
 
     try:
-        # Initialize DB Manager for summary data
-        db = DBManager()
+        # Use cached DB Manager for summary data
+        db = get_db()
         daily_profit_usd = db.get_today_summary(symbol)
         
         # Calculate daily_profit_pct based on actual closed trades

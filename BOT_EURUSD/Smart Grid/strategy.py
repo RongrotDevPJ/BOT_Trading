@@ -20,6 +20,7 @@ class SmartGridStrategy:
         self.last_trend_log_time = 0
         self.last_gap_log_time = 0
         self.last_analysis_log_time = 0
+        self.last_initial_log_time = 0 # Prevent initial entry log spam
 
     def is_max_drawdown_reached(self, executor, tick):
          """Checks if current account drawdown exceeds the max limit and performs Hedging if enabled."""
@@ -144,15 +145,21 @@ class SmartGridStrategy:
         is_rsi_sell = current_rsi >= config.RSI_SELL_LEVEL
 
         if is_rsi_buy and is_trend_buy:
+            current_time = time.time()
             trend_str = f"| Price({tick.ask:.5f}) > EMA({current_ema:.5f})" if enable_trend else "(Trend Filter OFF)"
-            self.logger.info(f"✨ [Analysis] Initial BUY Entry Triggered: RSI={current_rsi:.2f} <= {config.RSI_BUY_LEVEL} {trend_str}")
+            if current_time - self.last_initial_log_time > 60:
+                self.logger.info(f"✨ [Analysis] Initial BUY Entry Triggered: RSI={current_rsi:.2f} <= {config.RSI_BUY_LEVEL} {trend_str}")
+                self.last_initial_log_time = current_time
             result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, config.START_LOT, tick.ask)
             if result:
                 self.csv_logger.log_event(action="Initial Entry", side="BUY", price=tick.ask, rsi=current_rsi, ema=current_ema, lot_size=config.START_LOT, ticket=result.order)
             
         elif is_rsi_sell and is_trend_sell:
+            current_time = time.time()
             trend_str = f"| Price({tick.bid:.5f}) < EMA({current_ema:.5f})" if enable_trend else "(Trend Filter OFF)"
-            self.logger.info(f"✨ [Analysis] Initial SELL Entry Triggered: RSI={current_rsi:.2f} >= {config.RSI_SELL_LEVEL} {trend_str}")
+            if current_time - self.last_initial_log_time > 60:
+                self.logger.info(f"✨ [Analysis] Initial SELL Entry Triggered: RSI={current_rsi:.2f} >= {config.RSI_SELL_LEVEL} {trend_str}")
+                self.last_initial_log_time = current_time
             result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, config.START_LOT, tick.bid)
             if result:
                 self.csv_logger.log_event(action="Initial Entry", side="SELL", price=tick.bid, rsi=current_rsi, ema=current_ema, lot_size=config.START_LOT, ticket=result.order)

@@ -49,8 +49,7 @@ class DBManager:
             try:
                 cursor = conn.cursor()
                 cursor.execute(sql_create_trades_table)
-                conn.commit()
-                self.logger.info("Database initialized successfully.")
+                self.logger.debug("Database initialized successfully.")
             except Exception as e:
                 self.logger.error(f"Error initializing database table: {e}")
             finally:
