@@ -1,7 +1,7 @@
 import logging
 import MetaTrader5 as ag
 import config
-from shared_utils.notifier import send_telegram_alert
+from shared_utils.notifier import send_telegram_message
 
 class TradeExecutor:
     def __init__(self, mt5_client):
@@ -252,7 +252,7 @@ class TradeExecutor:
              # Calculate final PnL for the alert
              pnl = position.profit + position.commission + position.swap
              icon = "✅" if pnl >= 0 else "❌"
-             send_telegram_alert(f"{icon} <b>Trade Closed: {position.symbol}</b>\nTicket: {position.ticket}\nSide: {'BUY' if position.type == 0 else 'SELL'}\nProfit: ${pnl:.2f}")
+             send_telegram_message(f"{icon} <b>Trade Closed: {position.symbol}</b>\nTicket: {position.ticket}\nSide: {'BUY' if position.type == 0 else 'SELL'}\nProfit: ${pnl:.2f}")
          
          return self._handle_retcode(result, request)
 

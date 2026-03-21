@@ -30,7 +30,7 @@ class TelegramNotifier:
             except Exception as e:
                 logger.error(f"Error loading .env for Telegram: {e}")
 
-    def send_telegram_alert(self, message):
+    def send_telegram_message(self, message):
         """Sends a message to the configured Telegram chat."""
         if not self.token or not self.chat_id:
             # Silently skip if not configured, to avoid spamming logs
@@ -54,5 +54,5 @@ class TelegramNotifier:
 # Singleton instance
 notifier = TelegramNotifier()
 
-def send_telegram_alert(message):
-    notifier.send_telegram_alert(message)
+def send_telegram_message(message):
+    notifier.send_telegram_message(message)

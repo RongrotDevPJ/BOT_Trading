@@ -21,7 +21,7 @@ from shared_utils.time_filter import TimeFilterClient
 from shared_utils.display_manager import render_dashboard
 from strategy import SmartGridStrategy
 from shared_utils.global_risk_manager import check_global_drawdown, is_trading_suspended
-from shared_utils.notifier import send_telegram_alert
+from shared_utils.notifier import send_telegram_message
 
 # Setup Logging
 log_dir = project_root / "Log_HistoryOrder" / "Text_Logs"
@@ -109,7 +109,7 @@ def main():
                 continue
 
             if check_global_drawdown(max_dd_percent=getattr(config, 'MAX_DD_PERCENT', 15.0)):
-                send_telegram_alert(f"🚨 <b>CRITICAL: Global Kill Switch Triggered!</b>\nAccount Drawdown exceeded limit. All positions closed.")
+                send_telegram_message(f"🚨 <b>CRITICAL: Global Kill Switch Triggered!</b>\nAccount Drawdown exceeded limit. All positions closed.")
                 logger.critical("Global Kill Switch activated! Trading stopped.")
                 continue
                 
@@ -220,7 +220,7 @@ def main():
                         
                         # Send Daily Summary to Telegram (Phase 4)
                         today_profit = strategy.csv_logger.db_manager.get_today_summary(symbol=config.SYMBOL)
-                        send_telegram_alert(f"💰 <b>Daily Summary: {config.SYMBOL}</b>\nProfit: ${today_profit:.2f}\nEnd Equity: ${account_info.equity:.2f}")
+                        send_telegram_message(f"💰 <b>Daily Summary: {config.SYMBOL}</b>\nProfit: ${today_profit:.2f}\nEnd Equity: ${account_info.equity:.2f}")
                         
                         # Auto-Archive old data (Phase 3)
                         try:
@@ -238,7 +238,7 @@ def main():
                         if current_equity >= target_equity:
                             msg = f"🎉 {config.SYMBOL} DAILY TARGET REACHED! Equity {current_equity:.2f} >= {target_equity:.2f}. Entering Close-Only mode."
                             logger.critical(msg)
-                            send_telegram_alert(msg)
+                            send_telegram_message(msg)
                             daily_target_reached = True
                             
                 if daily_target_reached:
