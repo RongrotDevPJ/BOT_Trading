@@ -137,32 +137,38 @@ class TradeExecutor:
         If profit exceeds activation_points, moves SL to Entry + lock_points.
         Guarantees no loss once a certain profit threshold is met.
         """
+        # Optimization: Fetch ONLY positions for this symbol from MT5 terminal directly
         positions = ag.positions_get(symbol=symbol)
         if not positions:
             return
 
-        point = ag.symbol_info(symbol).point
+        tick = ag.symbol_info_tick(symbol)
+        info = ag.symbol_info(symbol)
+        if not tick or not info:
+            return
+
+        point = info.point
         activation_dist = activation_points * point
         lock_dist = lock_points * point
 
         for p in positions:
-            if p.magic != config.MAGIC_NUMBER: continue
+            # Quick filter for Magic Number
+            if p.magic != config.MAGIC_NUMBER: 
+                continue
 
             if p.type == ag.POSITION_TYPE_BUY:
-                tick = ag.symbol_info_tick(symbol)
-                if tick and (tick.bid - p.price_open) >= activation_dist:
+                if (tick.bid - p.price_open) >= activation_dist:
                     target_sl = p.price_open + lock_dist
                     # Only move SL if it's currently below the target or not set
-                    if p.sl < target_sl:
+                    if p.sl < (target_sl - point): # Buffer to avoid repeat modifications
                         self.modify_sl(p.ticket, symbol, target_sl)
                         self.logger.info(f"💎 BE: Moved BUY SL for {p.ticket} to {target_sl}")
 
             elif p.type == ag.POSITION_TYPE_SELL:
-                tick = ag.symbol_info_tick(symbol)
-                if tick and (p.price_open - tick.ask) >= activation_dist:
+                if (p.price_open - tick.ask) >= activation_dist:
                     target_sl = p.price_open - lock_dist
                     # Only move SL if it's currently above the target or not set
-                    if p.sl == 0.0 or p.sl > target_sl:
+                    if p.sl == 0.0 or p.sl > (target_sl + point):
                         self.modify_sl(p.ticket, symbol, target_sl)
                         self.logger.info(f"💎 BE: Moved SELL SL for {p.ticket} to {target_sl}")
 
@@ -175,21 +181,20 @@ class TradeExecutor:
         if not positions:
             return
 
-        point = ag.symbol_info(symbol).point
+        tick = ag.symbol_info_tick(symbol)
+        info = ag.symbol_info(symbol)
+        if not tick or not info:
+            return
+
+        point = info.point
         step_dist = trailing_step * point
-        
-        # User requested 50 points trailing distance as well? 
-        # Usually Trailing Stop has a 'distance' and a 'step'. 
-        # I'll use trailing_step as both for simplicity or as the minimal move.
         trail_dist = step_dist 
 
         for p in positions:
-            if p.magic != config.MAGIC_NUMBER: continue
-            tick = ag.symbol_info_tick(symbol)
-            if not tick: continue
+            if p.magic != config.MAGIC_NUMBER: 
+                continue
 
             if p.type == ag.POSITION_TYPE_BUY:
-                # If price is far above current SL + trail_dist
                 # New potential SL
                 new_sl = tick.bid - trail_dist
                 if p.sl == 0.0:
