@@ -259,7 +259,13 @@ def main():
                 
                 current_stoch = None
                 if getattr(config, 'ENABLE_STOCH_FILTER', False):
-                    current_stoch = indicator_client.get_stochastic(config.SYMBOL, config.TIMEFRAME, config.STOCH_K, config.STOCH_D, config.STOCH_SLOWING)
+                    current_stoch = indicator_client.get_stochastic(
+                        config.SYMBOL, 
+                        config.TIMEFRAME, 
+                        getattr(config, 'STOCH_K', 5), 
+                        getattr(config, 'STOCH_D', 3), 
+                        getattr(config, 'STOCH_SLOWING', 3)
+                    )
                 
                 # --- Periodic Snapshot Log (Every 15 mins) ---
                 if current_time - last_snapshot_log > 900:

@@ -124,14 +124,14 @@ class SmartGridStrategy:
              
         return basket_tp
 
-    def check_initial_entry(self, executor, current_rsi, current_ema, tick):
-        """Checks RSI and EMA to determine if a first trade should be opened."""
+    def check_initial_entry(self, executor, current_rsi, current_ema, tick, current_stoch=None):
+        """Checks RSI, Stochastic, and EMA to determine if a first trade should be opened."""
         if current_rsi is None or tick is None or current_ema is None:
             return
 
         positions = self.get_positions()
         if len(positions) > 0:
-            return 
+            return # Grid is already active, do not open primary entry
 
         # Check News Filter (Phase 2)
         if not is_safe_to_trade(config.SYMBOL):
@@ -149,25 +149,38 @@ class SmartGridStrategy:
         is_rsi_buy = current_rsi <= config.RSI_BUY_LEVEL
         is_rsi_sell = current_rsi >= config.RSI_SELL_LEVEL
 
-        if is_rsi_buy and is_trend_buy:
+        # Stochastic Filter
+        enable_stoch = getattr(config, 'ENABLE_STOCH_FILTER', False)
+        is_stoch_buy = True
+        is_stoch_sell = True
+        stoch_str = ""
+
+        if enable_stoch and current_stoch is not None:
+             k, d = current_stoch
+             if k is not None:
+                 is_stoch_buy = k <= config.STOCH_BUY_LEVEL
+                 is_stoch_sell = k >= config.STOCH_SELL_LEVEL
+                 stoch_str = f"| Stoch={k:.2f}"
+
+        if is_rsi_buy and is_trend_buy and is_stoch_buy:
             current_time = time.time()
             trend_str = f"| Price({tick.ask:.5f}) > EMA({current_ema:.5f})" if enable_trend else "(Trend Filter OFF)"
             if current_time - self.last_initial_log_time > 60:
-                self.logger.info(f"✨ [Analysis] Initial BUY Entry Triggered: RSI={current_rsi:.2f} <= {config.RSI_BUY_LEVEL} {trend_str}")
+                self.logger.info(f"✨ [Analysis] Initial BUY Entry Triggered: RSI={current_rsi:.2f} <= {config.RSI_BUY_LEVEL} {stoch_str} {trend_str}")
                 self.last_initial_log_time = current_time
             result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, config.START_LOT, tick.ask)
             if result:
-                self.csv_logger.log_event(action="Initial Entry", side="BUY", price=tick.ask, rsi=current_rsi, ema=current_ema, lot_size=config.START_LOT, ticket=result.order)
+                self.csv_logger.log_event(action="Initial Entry", side="BUY", price=tick.ask, rsi=current_rsi, ema=current_ema, lot_size=config.START_LOT, ticket=result.order, notes=stoch_str)
             
-        elif is_rsi_sell and is_trend_sell:
+        elif is_rsi_sell and is_trend_sell and is_stoch_sell:
             current_time = time.time()
             trend_str = f"| Price({tick.bid:.5f}) < EMA({current_ema:.5f})" if enable_trend else "(Trend Filter OFF)"
             if current_time - self.last_initial_log_time > 60:
-                self.logger.info(f"✨ [Analysis] Initial SELL Entry Triggered: RSI={current_rsi:.2f} >= {config.RSI_SELL_LEVEL} {trend_str}")
+                self.logger.info(f"✨ [Analysis] Initial SELL Entry Triggered: RSI={current_rsi:.2f} >= {config.RSI_SELL_LEVEL} {stoch_str} {trend_str}")
                 self.last_initial_log_time = current_time
             result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, config.START_LOT, tick.bid)
             if result:
-                self.csv_logger.log_event(action="Initial Entry", side="SELL", price=tick.bid, rsi=current_rsi, ema=current_ema, lot_size=config.START_LOT, ticket=result.order)
+                self.csv_logger.log_event(action="Initial Entry", side="SELL", price=tick.bid, rsi=current_rsi, ema=current_ema, lot_size=config.START_LOT, ticket=result.order, notes=stoch_str)
 
     def get_dynamic_grid_distance(self, num_positions, current_atr):
          """Calculates distance based on ATR * Multiplier or Fixed Points with smart multipliers."""

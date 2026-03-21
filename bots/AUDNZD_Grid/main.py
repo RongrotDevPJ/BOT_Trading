@@ -257,6 +257,16 @@ def main():
                 current_atr = indicator_client.get_atr(config.SYMBOL, config.TIMEFRAME, config.ATR_PERIOD)
                 current_ema = indicator_client.get_ema(config.SYMBOL, config.EMA_TIMEFRAME, config.EMA_PERIOD)
                 
+                current_stoch = None
+                if getattr(config, 'ENABLE_STOCH_FILTER', False):
+                    current_stoch = indicator_client.get_stochastic(
+                        config.SYMBOL, 
+                        config.TIMEFRAME, 
+                        getattr(config, 'STOCH_K', 5), 
+                        getattr(config, 'STOCH_D', 3), 
+                        getattr(config, 'STOCH_SLOWING', 3)
+                    )
+                
                 # --- Periodic Snapshot Log (Every 15 mins) ---
                 if current_time - last_snapshot_log > 900:
                     # Filter: Only log if RSI is extreme (outside 35-65)
@@ -278,7 +288,7 @@ def main():
 
                 # Check Time Filter AND Daily Target AND News Filter before allowing NEW initial entries
                 if not daily_target_reached and time_filter.is_allowed_to_trade() and is_news_safe(config.SYMBOL):
-                    strategy.check_initial_entry(executor, current_rsi, current_ema, tick)
+                    strategy.check_initial_entry(executor, current_rsi, current_ema, tick, current_stoch=current_stoch)
 
                 # Execute grid logic (Always allowed even if target reached, to close existing grid)
                 strategy.check_grid_logic(executor, current_atr, current_ema)
