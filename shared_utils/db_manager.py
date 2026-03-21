@@ -146,7 +146,14 @@ class DBManager:
     def archive_old_data(self, days=90):
         """
         Moves records older than 'days' to a backup database to keep the main DB fast.
+        Handles concurrent access by adding jitter and graceful skip on lock.
         """
+        import time
+        import random
+        
+        # Add small jitter to reduce collision risk when multiple bots reset at once
+        time.sleep(random.uniform(0, 3))
+
         conn = self.get_connection()
         if not conn:
             return
@@ -154,35 +161,48 @@ class DBManager:
         try:
             cursor = conn.cursor()
             # Calculate cutoff date
-            cursor.execute(f"SELECT date('now', '-{days} days')")
-            cutoff_date = cursor.fetchone()[0]
+            cursor.execute("SELECT date('now', '-' || ? || ' days')", (str(days),))
+            row = cursor.fetchone()
+            if not row:
+                return
+            cutoff_date = row[0]
             
             backup_db_path = self.db_dir / "backup_data.db"
             
-            self.logger.info(f"Archiving data older than {cutoff_date} to {backup_db_path.name}...")
-            
-            # Attach backup database
-            cursor.execute(f"ATTACH DATABASE '{str(backup_db_path)}' AS backup")
-            
-            # Create table in backup if not exists
-            cursor.execute("CREATE TABLE IF NOT EXISTS backup.trades AS SELECT * FROM main.trades WHERE 1=0")
-            
-            # Move data
-            cursor.execute("INSERT INTO backup.trades SELECT * FROM main.trades WHERE timestamp < ?", (f"{cutoff_date}%",))
-            rows_moved = cursor.rowcount
-            
-            if rows_moved > 0:
-                cursor.execute("DELETE FROM main.trades WHERE timestamp < ?", (f"{cutoff_date}%",))
-                conn.commit()
-                self.logger.warning(f"Successfully archived {rows_moved} old records.")
-            else:
-                self.logger.info("No old data found to archive.")
+            # Use ATTACH to move data across databases efficiently
+            # We use a try block for the ATTACH and table creation which are most likely to lock
+            try:
+                cursor.execute(f"ATTACH DATABASE ? AS backup", (str(backup_db_path),))
                 
-            cursor.execute("DETACH DATABASE backup")
-            
+                # Create table in backup if not exists - copy schema from main
+                cursor.execute("CREATE TABLE IF NOT EXISTS backup.trades AS SELECT * FROM main.trades WHERE 1=0")
+                
+                # Move data
+                cursor.execute("INSERT INTO backup.trades SELECT * FROM main.trades WHERE timestamp < ?", (f"{cutoff_date}%",))
+                rows_moved = cursor.rowcount
+                
+                if rows_moved > 0:
+                    cursor.execute("DELETE FROM main.trades WHERE timestamp < ?", (f"{cutoff_date}%",))
+                    conn.commit()
+                    self.logger.warning(f"📦 [Archive] Moved {rows_moved} old records to {backup_db_path.name}.")
+                else:
+                    self.logger.info("📦 [Archive] No old data found to archive.")
+                    
+                cursor.execute("DETACH DATABASE backup")
+            except sqlite3.OperationalError as e:
+                if "locked" in str(e).lower():
+                    self.logger.info("📦 [Archive] Backup database is currently locked by another bot. Skipping for now.")
+                else:
+                    raise e
+                    
         except Exception as e:
-            self.logger.error(f"Error during data archiving: {e}")
+            self.logger.error(f"❌ [Archive] Error during data archiving: {e}")
         finally:
+            # Ensure we attempt to detach if an error occurred after attachment
+            try:
+                cursor.execute("DETACH DATABASE backup")
+            except:
+                pass
             conn.close()
 
 if __name__ == "__main__":
