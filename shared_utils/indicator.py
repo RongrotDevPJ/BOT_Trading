@@ -139,3 +139,54 @@ class IndicatorClient:
             
         close_prices = [float(rate['close']) for rate in rates]
         return self._calculate_ema(close_prices, period)
+
+    def _calculate_stochastic(self, rates, k_period, d_period, slowing):
+        """
+        Calculates Stochastic Oscillator (%K and %D).
+        rates: array of candles
+        k_period: period for %K
+        d_period: period for %D (SMA of %K)
+        slowing: slowing period for %K (SMA of raw %K)
+        """
+        if len(rates) < k_period + slowing + d_period:
+            return None, None
+
+        raw_k_values = []
+        # Calculate raw %K for enough candles to calculate slowed %K and then %D
+        for i in range(len(rates) - (k_period - 1)):
+            window = rates[i : i + k_period]
+            highest_high = max(candle['high'] for candle in window)
+            lowest_low = min(candle['low'] for candle in window)
+            current_close = window[-1]['close']
+
+            if highest_high - lowest_low == 0:
+                raw_k = 50
+            else:
+                raw_k = 100 * (current_close - lowest_low) / (highest_high - lowest_low)
+            raw_k_values.append(raw_k)
+
+        # Slowing: SMA of raw_k
+        slowed_k_values = []
+        for i in range(len(raw_k_values) - (slowing - 1)):
+            slowed_k = sum(raw_k_values[i : i + slowing]) / slowing
+            slowed_k_values.append(slowed_k)
+
+        # %D: SMA of slowed_k
+        if len(slowed_k_values) < d_period:
+            return slowed_k_values[-1] if slowed_k_values else None, None
+
+        current_k = slowed_k_values[-1]
+        current_d = sum(slowed_k_values[-d_period:]) / d_period
+
+        return current_k, current_d
+
+    def get_stochastic(self, symbol, timeframe, k_period, d_period, slowing):
+        """ Fetches data and calculates Stochastic. """
+        num_candles = k_period + slowing + d_period + 10
+        rates = ag.copy_rates_from_pos(symbol, timeframe, 0, num_candles)
+
+        if rates is None or len(rates) < num_candles:
+            self.logger.warning(f"Could not fetch enough rates to calculate Stochastic for {symbol}.")
+            return None, None
+
+        return self._calculate_stochastic(rates, k_period, d_period, slowing)

@@ -19,6 +19,7 @@ LOT_MULTIPLIER = 1.1 # Multiply lot size cautiously for each grid level
 MAX_LOT = 0.5 # Maximum lot size allowed to protect Cent account
 BASKET_TP_POINTS = 50 # Break-even profit target (25 Pips)
 MIN_GRID_DISTANCE_POINTS = 100 # Minimum distance for dynamic ATR grid
+ENABLE_ATR_DISTANCE = True    # Enable ATR-based dynamic grid distance
 
 # --- Indicators & Filters Setup ---
 import MetaTrader5 as ag
@@ -32,7 +33,7 @@ ENABLE_TREND_FILTER = True # Keep enabled for trending pairs
 EMA_PERIOD = 200
 EMA_TIMEFRAME = ag.TIMEFRAME_M15
 ATR_PERIOD = 14
-ATR_MULTIPLIER = 1.5
+ATR_MULTIPLIER = 2.0
 
 # --- Advanced Exit Strategy ---
 USE_TRAILING_STOP = True

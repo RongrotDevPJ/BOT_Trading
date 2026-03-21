@@ -203,6 +203,12 @@ def main():
                         last_reset_day = trading_day
                         daily_target_reached = False
                         logger.info(f"--- DAILY RESET --- New trading day started. Starting Equity: {start_of_day_equity:.2f}")
+                        
+                        # Auto-Archive old data (Phase 3)
+                        try:
+                            strategy.csv_logger.db_manager.archive_old_data(days=90)
+                        except Exception as e:
+                            logger.error(f"Failed to archive old data: {e}")
 
                 # Check Daily Target
                 if not daily_target_reached and start_of_day_equity is not None:
@@ -232,11 +238,16 @@ def main():
                 
                 # --- Periodic Snapshot Log (Every 15 mins) ---
                 if current_time - last_snapshot_log > 900:
-                    rsi_val = f"{current_rsi:.2f}" if current_rsi is not None else "N/A"
-                    atr_val = f"{current_atr:.5f}" if current_atr is not None else "N/A"
-                    ema_val = f"{current_ema:.5f}" if current_ema is not None else "N/A"
-                    logger.info(f"📊 [Market Snapshot] Price: {tick.bid:.5f}/{tick.ask:.5f} | RSI({getattr(config, 'RSI_PERIOD', 14)}): {rsi_val} | ATR({getattr(config, 'ATR_PERIOD', 14)}): {atr_val} | EMA({getattr(config, 'EMA_PERIOD', 200)}): {ema_val}")
-                    last_snapshot_log = current_time
+                    # Filter: Only log if RSI is extreme (outside 35-65)
+                    if current_rsi is not None and (current_rsi < 35 or current_rsi > 65):
+                        rsi_val = f"{current_rsi:.2f}"
+                        atr_val = f"{current_atr:.5f}" if current_atr is not None else "N/A"
+                        ema_val = f"{current_ema:.5f}" if current_ema is not None else "N/A"
+                        logger.info(f"📊 [Market Snapshot] Price: {tick.bid:.5f}/{tick.ask:.5f} | RSI({getattr(config, 'RSI_PERIOD', 14)}): {rsi_val} | ATR({getattr(config, 'ATR_PERIOD', 14)}): {atr_val} | EMA({getattr(config, 'EMA_PERIOD', 200)}): {ema_val}")
+                        last_snapshot_log = current_time
+                    else:
+                        # Skip logging but update timer to check again in 15 mins
+                        last_snapshot_log = current_time
                     
                 # --- Permanent CSV Market Snapshot (Every 1 Hour) ---
                 if current_time - last_csv_snapshot_log > 3600:

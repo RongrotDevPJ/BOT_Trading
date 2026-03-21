@@ -49,7 +49,9 @@ class DBManager:
             try:
                 cursor = conn.cursor()
                 cursor.execute(sql_create_trades_table)
-                self.logger.debug("Database initialized successfully.")
+                # Add Index for performance
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_symbol_timestamp ON trades(symbol, timestamp);")
+                self.logger.info("Database initialized with indexes successfully.")
             except Exception as e:
                 self.logger.error(f"Error initializing database table: {e}")
             finally:
@@ -140,6 +142,48 @@ class DBManager:
             finally:
                 conn.close()
         return 0.0
+
+    def archive_old_data(self, days=90):
+        """
+        Moves records older than 'days' to a backup database to keep the main DB fast.
+        """
+        conn = self.get_connection()
+        if not conn:
+            return
+            
+        try:
+            cursor = conn.cursor()
+            # Calculate cutoff date
+            cursor.execute(f"SELECT date('now', '-{days} days')")
+            cutoff_date = cursor.fetchone()[0]
+            
+            backup_db_path = self.db_dir / "backup_data.db"
+            
+            self.logger.info(f"Archiving data older than {cutoff_date} to {backup_db_path.name}...")
+            
+            # Attach backup database
+            cursor.execute(f"ATTACH DATABASE '{str(backup_db_path)}' AS backup")
+            
+            # Create table in backup if not exists
+            cursor.execute("CREATE TABLE IF NOT EXISTS backup.trades AS SELECT * FROM main.trades WHERE 1=0")
+            
+            # Move data
+            cursor.execute("INSERT INTO backup.trades SELECT * FROM main.trades WHERE timestamp < ?", (f"{cutoff_date}%",))
+            rows_moved = cursor.rowcount
+            
+            if rows_moved > 0:
+                cursor.execute("DELETE FROM main.trades WHERE timestamp < ?", (f"{cutoff_date}%",))
+                conn.commit()
+                self.logger.warning(f"Successfully archived {rows_moved} old records.")
+            else:
+                self.logger.info("No old data found to archive.")
+                
+            cursor.execute("DETACH DATABASE backup")
+            
+        except Exception as e:
+            self.logger.error(f"Error during data archiving: {e}")
+        finally:
+            conn.close()
 
 if __name__ == "__main__":
     # Test DB

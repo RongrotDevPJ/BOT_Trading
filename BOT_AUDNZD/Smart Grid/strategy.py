@@ -165,13 +165,14 @@ class SmartGridStrategy:
                 self.csv_logger.log_event(action="Initial Entry", side="SELL", price=tick.bid, rsi=current_rsi, ema=current_ema, lot_size=config.START_LOT, ticket=result.order)
 
     def get_dynamic_grid_distance(self, num_positions, current_atr):
-         """Calculates distance based on Base ATR distance and smart step dynamic multipliers."""
-         # Base distance is calculated from ATR, with a minimum safety floor
-         base_distance = config.MIN_GRID_DISTANCE_POINTS
-         if current_atr is not None:
+         """Calculates distance based on ATR * Multiplier or Fixed Points with smart multipliers."""
+         # Use ATR if enabled, else fallback to fixed GRID_DISTANCE_POINTS
+         if getattr(config, 'ENABLE_ATR_DISTANCE', False) and current_atr is not None:
              point = ag.symbol_info(config.SYMBOL).point
              atr_points_distance = (current_atr * config.ATR_MULTIPLIER) / point
              base_distance = max(config.MIN_GRID_DISTANCE_POINTS, atr_points_distance)
+         else:
+             base_distance = config.GRID_DISTANCE_POINTS
              
          # Smart Dynamic Grid Distance Logic
          # Orders 1-4 (num_positions 0-3): Base distance
