@@ -22,6 +22,7 @@ from shared_utils.display_manager import render_dashboard
 from strategy import SmartGridStrategy
 from shared_utils.global_risk_manager import check_global_drawdown, is_trading_suspended
 from shared_utils.notifier import send_telegram_message
+from shared_utils.news_filter import is_safe_to_trade as is_news_safe
 
 # Setup Logging
 log_dir = project_root / "Log_HistoryOrder" / "Text_Logs"
@@ -279,8 +280,8 @@ def main():
                     strategy.csv_logger.log_event(action="Market Snapshot", price=tick.ask, spread=current_spread, rsi=current_rsi, atr=current_atr, ema=current_ema, notes=f"Spread:{current_spread}")
                     last_csv_snapshot_log = current_time
 
-                # Check Time Filter AND Daily Target before allowing NEW initial entries
-                if not daily_target_reached and time_filter.is_allowed_to_trade():
+                # Check Time Filter AND Daily Target AND News Filter before allowing NEW initial entries
+                if not daily_target_reached and time_filter.is_allowed_to_trade() and is_news_safe(config.SYMBOL):
                     strategy.check_initial_entry(executor, current_rsi, current_ema, tick, current_stoch=current_stoch)
 
                 # Execute grid logic (Always allowed even if target reached, to close existing grid)
