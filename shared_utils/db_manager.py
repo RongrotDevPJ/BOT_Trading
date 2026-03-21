@@ -159,10 +159,10 @@ class DBManager:
                         cursor.execute(f"ALTER TABLE backup.trades ADD COLUMN {col} REAL")
 
                 # Move data
-                cursor.execute("INSERT INTO backup.trades SELECT * FROM main.trades WHERE timestamp < ?", (f"{cutoff_date}%",))
+                cursor.execute("INSERT INTO backup.trades SELECT * FROM main.trades WHERE timestamp < ?", (f"{cutoff_date} 00:00:00",))
                 rows_moved = cursor.rowcount
                 if rows_moved > 0:
-                    cursor.execute("DELETE FROM main.trades WHERE timestamp < ?", (f"{cutoff_date}%",))
+                    cursor.execute("DELETE FROM main.trades WHERE timestamp < ?", (f"{cutoff_date} 00:00:00",))
                     conn.commit()
                     self.logger.warning(f"[Archive] Moved {rows_moved} old records to backup.")
                 else:
