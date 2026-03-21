@@ -2,6 +2,7 @@ import os
 import csv
 from datetime import datetime
 import threading
+import MetaTrader5 as mt5
 from shared_utils.db_manager import DBManager
 
 class CSVLogger:
@@ -41,6 +42,12 @@ class CSVLogger:
         
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
+        # Auto-fetch internal spread if not provided for specific actions
+        if spread is None and action in ["Initial Entry", "Grid Open", "Initial BUY Entry Triggered", "Initial SELL Entry Triggered"]:
+            s_info = mt5.symbol_info(self.symbol)
+            if s_info:
+                spread = s_info.spread
+        
         # Dual-Logging: CSV
         if self.filepath:
             row = [
@@ -76,8 +83,9 @@ class CSVLogger:
                 side=side,
                 price=price if price else 0.0,
                 lots=lot_size if lot_size is not None else 0.0,
+                spread=spread if spread is not None else 0.0,
                 profit=profit if profit is not None else 0.0,
-                comment=f"RSI:{rsi} EMA:{ema} {notes}"[:100]
+                comment=f"{notes}"[:100] # Cleaner comment now that we have columns
             )
         except Exception as e:
             print(f"Error logging to DB (via CSVLogger): {e}")

@@ -41,6 +41,7 @@ class DBManager:
             sl REAL,
             tp REAL,
             profit REAL DEFAULT 0.0,
+            spread REAL,
             comment TEXT
         );
         """
@@ -49,6 +50,12 @@ class DBManager:
             try:
                 cursor = conn.cursor()
                 cursor.execute(sql_create_trades_table)
+                # Ensure existing table has the spread column (for legacy DBs)
+                cursor.execute("PRAGMA table_info(trades)")
+                columns = [row[1] for row in cursor.fetchall()]
+                if 'spread' not in columns:
+                    cursor.execute("ALTER TABLE trades ADD COLUMN spread REAL")
+                
                 # Add Index for performance
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_symbol_timestamp ON trades(symbol, timestamp);")
                 self.logger.info("Database initialized with indexes successfully.")
@@ -57,18 +64,18 @@ class DBManager:
             finally:
                 conn.close()
 
-    def log_trade(self, action, symbol, ticket=None, side=None, price=0.0, lots=0.0, sl=0.0, tp=0.0, profit=0.0, comment=""):
+    def log_trade(self, action, symbol, ticket=None, side=None, price=0.0, lots=0.0, sl=0.0, tp=0.0, spread=0.0, profit=0.0, comment=""):
         """Inserts a trade event record into the database."""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         sql = """
-        INSERT OR IGNORE INTO trades (timestamp, symbol, action, ticket, side, price, lots, sl, tp, profit, comment)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT OR IGNORE INTO trades (timestamp, symbol, action, ticket, side, price, lots, sl, tp, spread, profit, comment)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         conn = self.get_connection()
         if conn:
             try:
                 cursor = conn.cursor()
-                cursor.execute(sql, (timestamp, symbol, action, ticket, side, price, lots, sl, tp, profit, comment))
+                cursor.execute(sql, (timestamp, symbol, action, ticket, side, price, lots, sl, tp, spread, profit, comment))
                 conn.commit()
             except Exception as e:
                 self.logger.error(f"Error logging trade to DB: {e}")

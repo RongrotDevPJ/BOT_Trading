@@ -248,7 +248,7 @@ def main():
                         atr_val = f"{current_atr:.5f}" if current_atr is not None else "N/A"
                         ema_val = f"{current_ema:.5f}" if current_ema is not None else "N/A"
                         stoch_val = f"K:{current_stoch[0]:.2f}/D:{current_stoch[1]:.2f}" if current_stoch and current_stoch[0] is not None else "N/A"
-                        logger.info(f"📊 [Market Snapshot] Price: {tick.bid:.5f}/{tick.ask:.5f} | RSI({getattr(config, 'RSI_PERIOD', 14)}): {rsi_val} | Stoch: {stoch_val} | ATR({getattr(config, 'ATR_PERIOD', 14)}): {atr_val} | EMA({getattr(config, 'EMA_PERIOD', 200)}): {ema_val}")
+                        logger.info(f"📊 [Market Snapshot] Price: {tick.bid:.5f}/{tick.ask:.5f} | Spread: {current_spread} | RSI({getattr(config, 'RSI_PERIOD', 14)}): {rsi_val} | Stoch: {stoch_val} | ATR({getattr(config, 'ATR_PERIOD', 14)}): {atr_val} | EMA({getattr(config, 'EMA_PERIOD', 200)}): {ema_val}")
                         last_snapshot_log = current_time
                     else:
                         # Skip logging but update timer to check again in 15 mins
@@ -256,7 +256,7 @@ def main():
                     
                 # --- Permanent CSV Market Snapshot (Every 1 Hour) ---
                 if current_time - last_csv_snapshot_log > 3600:
-                    strategy.csv_logger.log_event(action="Market Snapshot", price=tick.ask, rsi=current_rsi, atr=current_atr, ema=current_ema)
+                    strategy.csv_logger.log_event(action="Market Snapshot", price=tick.ask, spread=current_spread, rsi=current_rsi, atr=current_atr, ema=current_ema, notes=f"Spread:{current_spread}")
                     last_csv_snapshot_log = current_time
 
                 # Check Time Filter AND Daily Target before allowing NEW initial entries
