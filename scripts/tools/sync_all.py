@@ -3,8 +3,8 @@ import shutil
 
 from pathlib import Path
 
-# Get project root dynamicallly (one level up from scripts/ folder)
-project_root = Path(__file__).resolve().parents[1]
+# Get project root dynamically (two levels up from scripts/tools/ folder)
+project_root = Path(__file__).resolve().parents[2]
 source_dir = project_root / 'bots' / 'XAUUSD_Grid'
 targets = ['AUDNZD_Grid', 'EURGBP_Grid', 'EURUSD_Grid']
 files_to_sync = ['main.py', 'strategy.py'] # execution.py is now shared!

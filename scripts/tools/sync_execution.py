@@ -2,8 +2,10 @@ import os
 import shutil
 
 from pathlib import Path
-project_root = Path(__file__).resolve().parents[1]
-source_file = project_root / 'bots' / 'EURGBP_Grid' / 'execution.py' # This might not exist if deleted!
+# Get project root dynamically (two levels up from scripts/tools/ folder)
+project_root = Path(__file__).resolve().parents[2]
+# Note: Execution is now shared in shared_utils/, but syncing exists for legacy support/customization
+source_file = project_root / 'bots' / 'EURGBP_Grid' / 'execution.py' 
 targets = ['XAUUSD_Grid', 'EURUSD_Grid', 'AUDNZD_Grid']
 
 for target in targets:

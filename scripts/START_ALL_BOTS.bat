@@ -10,7 +10,7 @@ echo Launching all bots in tiled layout...
 rem We CD into the directory first to simplify paths for Windows Terminal
 cd /d "%~dp0"
 
-rem Use relative paths (.\) and a single line to avoid '^' issues with spaces
-wt -d . cmd /k ".\EURGBP_BOT.bat" ; split-pane -V -d . cmd /k ".\XAUUSD_BOT.bat" ; focus-pane -t 0 ; split-pane -H -d . cmd /k ".\EURUSD_BOT.bat" ; focus-pane -t 1 ; split-pane -H -d . cmd /k ".\AUDNZD_BOT.bat"
+rem Use relative paths (.\launchers\) for the new structure
+wt -d . cmd /k ".\launchers\EURGBP_BOT.bat" ; split-pane -V -d . cmd /k ".\launchers\XAUUSD_BOT.bat" ; focus-pane -t 0 ; split-pane -H -d . cmd /k ".\launchers\EURUSD_BOT.bat" ; focus-pane -t 1 ; split-pane -H -d . cmd /k ".\launchers\AUDNZD_BOT.bat"
 
 exit

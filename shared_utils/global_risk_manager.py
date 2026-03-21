@@ -50,7 +50,12 @@ def trigger_emergency_close():
             ticket = pos.ticket
             volume = pos.volume
             order_type = mt5.ORDER_TYPE_SELL if pos.type == mt5.POSITION_TYPE_BUY else mt5.ORDER_TYPE_BUY
-            price = mt5.symbol_info_tick(symbol).bid if order_type == mt5.ORDER_TYPE_SELL else mt5.symbol_info_tick(symbol).ask
+            tick = mt5.symbol_info_tick(symbol)
+            if tick is None:
+                logger.error(f"Could not get tick for {symbol}. Skipping close for ticket {ticket}.")
+                continue
+                
+            price = tick.bid if order_type == mt5.ORDER_TYPE_SELL else tick.ask
             
             request = {
                 "action": mt5.TRADE_ACTION_DEAL,

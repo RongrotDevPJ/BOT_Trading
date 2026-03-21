@@ -1,15 +1,15 @@
 @echo off
-title MT5 XAUUSD Bot
-color 0E
+title MT5 EURGBP Bot
+color 0A
 
 echo =========================================
-echo       Smart Grid MT5 Bot (XAUUSD)
+echo       Smart Grid MT5 Bot (EURGBP)
 echo =========================================
 echo.
-echo Starting Gold bot... Please do not close this window.
+echo Starting bot... Please do not close this window.
 echo (Press Ctrl+C to stop the bot)
 echo.
 
-cd /d "%~dp0..\bots\XAUUSD_Grid"
+cd /d "%~dp0..\..\bots\EURGBP_Grid"
 python main.py
 pause

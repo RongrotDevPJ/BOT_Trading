@@ -2,7 +2,8 @@ import os
 import shutil
 
 from pathlib import Path
-project_root = Path(__file__).resolve().parents[1]
+# Get project root dynamically (two levels up from scripts/tools/ folder)
+project_root = Path(__file__).resolve().parents[2]
 source_file = project_root / 'bots' / 'XAUUSD_Grid' / 'strategy.py'
 targets = ['AUDNZD_Grid', 'EURGBP_Grid', 'EURUSD_Grid']
 
