@@ -2,3 +2,4 @@ MetaTrader5
 python-dotenv
 psutil
 requests
+pytz
