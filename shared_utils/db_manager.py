@@ -19,8 +19,11 @@ class DBManager:
     def get_connection(self):
         """Returns a connection to the SQLite database with row factory enabled."""
         try:
-            conn = sqlite3.connect(str(self.db_path), timeout=10)
+            conn = sqlite3.connect(str(self.db_path), timeout=20) # Increased timeout
             conn.row_factory = sqlite3.Row
+            # Enable WAL mode for better concurrency (Phase 5)
+            conn.execute('PRAGMA journal_mode=WAL;')
+            conn.execute('PRAGMA synchronous=NORMAL;')
             return conn
         except Exception as e:
             self.logger.error(f"Error connecting to database: {e}")

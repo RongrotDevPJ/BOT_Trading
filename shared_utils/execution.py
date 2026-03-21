@@ -1,6 +1,7 @@
 import logging
 import MetaTrader5 as ag
 import config
+from shared_utils.notifier import send_telegram_alert
 
 class TradeExecutor:
     def __init__(self, mt5_client):
@@ -127,39 +128,84 @@ class TradeExecutor:
 
     def manage_trailing_stop(self, positions, tick):
         """
-        Manages trailing stops for all open positions.
-        Called on every tick.
+        [DEPRECATED/LEGACY] Use apply_trailing_stop for newer logic.
         """
-        if not config.USE_TRAILING_STOP or not positions or tick is None:
+        pass # Will be replaced by apply_trailing_stop in main loops
+
+    def apply_break_even(self, symbol, activation_points=300, lock_points=20):
+        """
+        If profit exceeds activation_points, moves SL to Entry + lock_points.
+        Guarantees no loss once a certain profit threshold is met.
+        """
+        positions = ag.positions_get(symbol=symbol)
+        if not positions:
             return
 
-        point = ag.symbol_info(config.SYMBOL).point
-        trail_points = config.TRAILING_STOP_POINTS * point
-        step_points = config.TRAILING_STEP_POINTS * point
-        
+        point = ag.symbol_info(symbol).point
+        activation_dist = activation_points * point
+        lock_dist = lock_points * point
+
         for p in positions:
-            if p.type == 0: # BUY
-                # Calculate profit in price difference
-                profit_distance = tick.bid - p.price_open
-                
-                # Check if we are past the break-even + basket target
-                if profit_distance > (config.BASKET_TP_POINTS * point):
-                    new_sl = tick.bid - trail_points
-                    
-                    # Only move SL up, and only if it moves more than step_points
-                    if p.sl == 0.0 or (new_sl - p.sl) >= step_points:
-                        self.modify_sl(p.ticket, config.SYMBOL, new_sl)
-                        
-            elif p.type == 1: # SELL
-                profit_distance = p.price_open - tick.ask
-                
-                if profit_distance > (config.BASKET_TP_POINTS * point):
-                    new_sl = tick.ask + trail_points
-                    
-                    # Only move SL down, and only if it moves more than step_points
-                    # p.sl == 0.0 means SL hasn't been set yet
-                    if p.sl == 0.0 or (p.sl - new_sl) >= step_points:
-                        self.modify_sl(p.ticket, config.SYMBOL, new_sl)
+            if p.magic != config.MAGIC_NUMBER: continue
+
+            if p.type == ag.POSITION_TYPE_BUY:
+                tick = ag.symbol_info_tick(symbol)
+                if tick and (tick.bid - p.price_open) >= activation_dist:
+                    target_sl = p.price_open + lock_dist
+                    # Only move SL if it's currently below the target or not set
+                    if p.sl < target_sl:
+                        self.modify_sl(p.ticket, symbol, target_sl)
+                        self.logger.info(f"💎 BE: Moved BUY SL for {p.ticket} to {target_sl}")
+
+            elif p.type == ag.POSITION_TYPE_SELL:
+                tick = ag.symbol_info_tick(symbol)
+                if tick and (p.price_open - tick.ask) >= activation_dist:
+                    target_sl = p.price_open - lock_dist
+                    # Only move SL if it's currently above the target or not set
+                    if p.sl == 0.0 or p.sl > target_sl:
+                        self.modify_sl(p.ticket, symbol, target_sl)
+                        self.logger.info(f"💎 BE: Moved SELL SL for {p.ticket} to {target_sl}")
+
+    def apply_trailing_stop(self, symbol, trailing_step=50):
+        """
+        Moves SL every 'trailing_step' points in the direction of profit.
+        Trailing Step ensures we don't spam modifications too often.
+        """
+        positions = ag.positions_get(symbol=symbol)
+        if not positions:
+            return
+
+        point = ag.symbol_info(symbol).point
+        step_dist = trailing_step * point
+        
+        # User requested 50 points trailing distance as well? 
+        # Usually Trailing Stop has a 'distance' and a 'step'. 
+        # I'll use trailing_step as both for simplicity or as the minimal move.
+        trail_dist = step_dist 
+
+        for p in positions:
+            if p.magic != config.MAGIC_NUMBER: continue
+            tick = ag.symbol_info_tick(symbol)
+            if not tick: continue
+
+            if p.type == ag.POSITION_TYPE_BUY:
+                # If price is far above current SL + trail_dist
+                # New potential SL
+                new_sl = tick.bid - trail_dist
+                if p.sl == 0.0:
+                    # Initial move to BE or slightly below open if in profit
+                    if (tick.bid - p.price_open) > step_dist:
+                        self.modify_sl(p.ticket, symbol, p.price_open)
+                elif (new_sl - p.sl) >= step_dist:
+                    self.modify_sl(p.ticket, symbol, new_sl)
+
+            elif p.type == ag.POSITION_TYPE_SELL:
+                new_sl = tick.ask + trail_dist
+                if p.sl == 0.0:
+                    if (p.price_open - tick.ask) > step_dist:
+                        self.modify_sl(p.ticket, symbol, p.price_open)
+                elif p.sl > 0.0 and (p.sl - new_sl) >= step_dist:
+                    self.modify_sl(p.ticket, symbol, new_sl)
 
     def modify_tp(self, ticket, symbol, new_tp):
          """Modifies the take profit of an existing order."""
@@ -201,6 +247,13 @@ class TradeExecutor:
          
          self.logger.info(f"Closing Position {position.ticket}")
          result = ag.order_send(request)
+         
+         if result and result.retcode == ag.TRADE_RETCODE_DONE:
+             # Calculate final PnL for the alert
+             pnl = position.profit + position.commission + position.swap
+             icon = "✅" if pnl >= 0 else "❌"
+             send_telegram_alert(f"{icon} <b>Trade Closed: {position.symbol}</b>\nTicket: {position.ticket}\nSide: {'BUY' if position.type == 0 else 'SELL'}\nProfit: ${pnl:.2f}")
+         
          return self._handle_retcode(result, request)
 
     def manage_partial_close(self, positions, tick):

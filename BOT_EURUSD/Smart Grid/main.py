@@ -20,6 +20,8 @@ from shared_utils.indicator import IndicatorClient
 from shared_utils.time_filter import TimeFilterClient
 from shared_utils.display_manager import render_dashboard
 from strategy import SmartGridStrategy
+from shared_utils.global_risk_manager import check_global_drawdown, is_trading_suspended
+from shared_utils.notifier import send_telegram_alert
 
 # Setup Logging
 log_dir = project_root / "Log_HistoryOrder" / "Text_Logs"
@@ -97,6 +99,18 @@ def main():
                 logger.warning("Terminal disconnected! Attempting reconnect in 10s...")
                 time.sleep(10)
                 client.connect() 
+                continue
+
+            # 1.1 Global Risk Check (Phase 1)
+            if is_trading_suspended():
+                if current_time - last_ui_data_update >= 10:
+                    logger.warning("🚫 TRADING SUSPENDED: Global Kill Switch is ACTIVE. Manual reset required.")
+                time.sleep(10)
+                continue
+
+            if check_global_drawdown(max_dd_percent=getattr(config, 'MAX_DD_PERCENT', 15.0)):
+                send_telegram_alert(f"🚨 <b>CRITICAL: Global Kill Switch Triggered!</b>\nAccount Drawdown exceeded limit. All positions closed.")
+                logger.critical("Global Kill Switch activated! Trading stopped.")
                 continue
                 
             mt5_status = "CONNECTED" if client.is_connected() else "DISCONNECTED"
@@ -204,6 +218,10 @@ def main():
                         daily_target_reached = False
                         logger.info(f"--- DAILY RESET --- New trading day started. Starting Equity: {start_of_day_equity:.2f}")
                         
+                        # Send Daily Summary to Telegram (Phase 4)
+                        today_profit = strategy.csv_logger.db_manager.get_today_summary(symbol=config.SYMBOL)
+                        send_telegram_alert(f"💰 <b>Daily Summary: {config.SYMBOL}</b>\nProfit: ${today_profit:.2f}\nEnd Equity: ${account_info.equity:.2f}")
+                        
                         # Auto-Archive old data (Phase 3)
                         try:
                             strategy.csv_logger.db_manager.archive_old_data(days=90)
@@ -218,7 +236,9 @@ def main():
                         target_equity = start_of_day_equity * (1 + getattr(config, 'DAILY_TARGET_PERCENT', 15.0) / 100.0)
                         
                         if current_equity >= target_equity:
-                            logger.critical(f"🎉 DAILY TARGET REACHED! Equity {current_equity:.2f} >= {target_equity:.2f}. Entering Close-Only mode.")
+                            msg = f"🎉 {config.SYMBOL} DAILY TARGET REACHED! Equity {current_equity:.2f} >= {target_equity:.2f}. Entering Close-Only mode."
+                            logger.critical(msg)
+                            send_telegram_alert(msg)
                             daily_target_reached = True
                             
                 if daily_target_reached:
@@ -262,11 +282,12 @@ def main():
                 # Execute grid logic (Always allowed even if target reached, to close existing grid)
                 strategy.check_grid_logic(executor, current_atr, current_ema)
                 
-                # Manage positions
-                positions = strategy.get_positions()
+                # Manage positions (Phase 3)
                 executor.ghost_close_check(positions, tick, strategy)
                 executor.manage_partial_close(positions, tick)
-                executor.manage_trailing_stop(positions, tick)
+                # Apply Break-Even and Trailing Stop
+                executor.apply_break_even(config.SYMBOL, activation_points=300, lock_points=20)
+                executor.apply_trailing_stop(config.SYMBOL, trailing_step=50)
 
             except Exception as e:
                 logger.error(f"Error during strategy execution: {e}", exc_info=True)

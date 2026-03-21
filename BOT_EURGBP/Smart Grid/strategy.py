@@ -10,6 +10,7 @@ if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
 from shared_utils.csv_logger import CSVLogger
+from shared_utils.news_filter import is_safe_to_trade
 
 class SmartGridStrategy:
     def __init__(self):
@@ -130,7 +131,11 @@ class SmartGridStrategy:
 
         positions = self.get_positions()
         if len(positions) > 0:
-            return # Grid is already active, do not open primary entry
+            return 
+
+        # Check News Filter (Phase 2)
+        if not is_safe_to_trade(config.SYMBOL):
+            return
 
         # Check Trend Filter if enabled, otherwise assume trend matches
         enable_trend = getattr(config, 'ENABLE_TREND_FILTER', True)
