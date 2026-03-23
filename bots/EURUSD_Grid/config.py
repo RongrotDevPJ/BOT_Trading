@@ -42,6 +42,7 @@ TRAILING_STEP_POINTS = 10 # Only move SL if profit increases by >= 10 points
 
 # --- Risk Management ---
 MAX_ALLOWED_SPREAD = 50 # Spread Guard limit
+ENABLE_DAILY_TARGET = False # Set to True to enable daily profit target (Close-Only)
 DAILY_TARGET_PERCENT = 15.0 # Stop trading for the day if equity grows by 15%
 MAX_DD_PERCENT = 30.0 # Stop trading if drawdown > 30%
 ENABLE_HEDGE_ON_DD = True # Auto hedge to lock port when DD > MAX_DD_PERCENT

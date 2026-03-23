@@ -230,7 +230,7 @@ def main():
                             logger.error(f"Failed to archive old data: {e}")
 
                 # Check Daily Target
-                if not daily_target_reached and start_of_day_equity is not None:
+                if getattr(config, 'ENABLE_DAILY_TARGET', False) and not daily_target_reached and start_of_day_equity is not None:
                     account_info = client.get_account_info()
                     if account_info:
                         current_equity = account_info.equity
