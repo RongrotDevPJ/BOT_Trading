@@ -13,12 +13,12 @@ MIN_START_LOT = 0.10        # Minimum allowed base lot
 MAX_START_LOT = 0.50        # Maximum allowed base lot
 
 # --- Smart Grid Settings ---
-GRID_DISTANCE_POINTS = 100 # Base distance fallback
+GRID_DISTANCE_POINTS = 250 # Base distance fallback
 GRID_MULTIPLIER = 1.2 # Distance multiplier for each sub-level (Moderate for Gold)
 LOT_MULTIPLIER = 1.1 # Multiply lot size cautiously for each grid level
 MAX_LOT = 0.5 # Maximum lot size allowed to protect Cent account
 BASKET_TP_POINTS = 50 # Break-even profit target (25 Pips)
-MIN_GRID_DISTANCE_POINTS = 100 # Minimum distance for dynamic ATR grid
+MIN_GRID_DISTANCE_POINTS = 200 # Minimum distance for dynamic ATR grid
 ENABLE_ATR_DISTANCE = True    # Enable ATR-based dynamic grid distance
 
 # --- Indicators & Filters Setup ---

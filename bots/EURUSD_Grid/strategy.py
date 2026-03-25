@@ -22,6 +22,8 @@ class SmartGridStrategy:
         self.last_gap_log_time = 0
         self.last_analysis_log_time = 0
         self.last_initial_log_time = 0 # Prevent initial entry log spam
+        self.last_initial_entry_time = 0
+        self.active_excursions = {}
 
     def is_max_drawdown_reached(self, executor, tick):
          """Checks if current account drawdown exceeds the max limit and performs Hedging if enabled."""
@@ -124,9 +126,12 @@ class SmartGridStrategy:
              
         return basket_tp
 
-    def check_initial_entry(self, executor, current_rsi, current_ema, tick, current_stoch=None):
+    def check_initial_entry(self, executor, current_rsi, current_ema, tick, current_stoch=None, current_atr=None):
         """Checks RSI, Stochastic, and EMA to determine if a first trade should be opened."""
         if current_rsi is None or tick is None or current_ema is None:
+            return
+
+        if time.time() - self.last_initial_entry_time < 10.0:
             return
 
         positions = self.get_positions()
@@ -168,8 +173,9 @@ class SmartGridStrategy:
             if current_time - self.last_initial_log_time > 60:
                 self.logger.info(f"✨ [Analysis] Initial BUY Entry Triggered: RSI={current_rsi:.2f} <= {config.RSI_BUY_LEVEL} {stoch_str} {trend_str}")
                 self.last_initial_log_time = current_time
-            result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, config.START_LOT, tick.ask)
+            result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, config.START_LOT, tick.ask, atr_value=current_atr, rsi_value=current_rsi, grid_level=1, cycle_id=None)
             if result:
+                self.last_initial_entry_time = time.time()
                 self.csv_logger.log_event(action="Initial Entry", side="BUY", price=tick.ask, rsi=current_rsi, ema=current_ema, lot_size=config.START_LOT, ticket=result.order, notes=stoch_str)
             
         elif is_rsi_sell and is_trend_sell and is_stoch_sell:
@@ -178,8 +184,9 @@ class SmartGridStrategy:
             if current_time - self.last_initial_log_time > 60:
                 self.logger.info(f"✨ [Analysis] Initial SELL Entry Triggered: RSI={current_rsi:.2f} >= {config.RSI_SELL_LEVEL} {stoch_str} {trend_str}")
                 self.last_initial_log_time = current_time
-            result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, config.START_LOT, tick.bid)
+            result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, config.START_LOT, tick.bid, atr_value=current_atr, rsi_value=current_rsi, grid_level=1, cycle_id=None)
             if result:
+                self.last_initial_entry_time = time.time()
                 self.csv_logger.log_event(action="Initial Entry", side="SELL", price=tick.bid, rsi=current_rsi, ema=current_ema, lot_size=config.START_LOT, ticket=result.order, notes=stoch_str)
 
     def get_dynamic_grid_distance(self, num_positions, current_atr):
@@ -321,7 +328,8 @@ class SmartGridStrategy:
             if self.needs_new_grid_level(buy_positions, current_ask, side=0, current_atr=current_atr, current_ema=current_ema):
                 dynamic_lot = self.get_dynamic_lot(len(buy_positions))
                 self.logger.info(f"🛒 Executing BUY Grid. Level: {len(buy_positions)+1}, Lot: {dynamic_lot}")
-                result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, dynamic_lot, current_ask)
+                cycle_id_val = str(min(buy_positions, key=lambda x: x.time).ticket)
+                result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, dynamic_lot, current_ask, atr_value=current_atr, rsi_value=None, grid_level=len(buy_positions)+1, cycle_id=cycle_id_val)
                 if result:
                     latest_p = max(buy_positions, key=lambda p: p.time)
                     dist_moved = abs(current_ask - latest_p.price_open) / ag.symbol_info(config.SYMBOL).point
@@ -337,7 +345,8 @@ class SmartGridStrategy:
              if self.needs_new_grid_level(sell_positions, current_bid, side=1, current_atr=current_atr, current_ema=current_ema):
                  dynamic_lot = self.get_dynamic_lot(len(sell_positions))
                  self.logger.info(f"🛒 Executing SELL Grid. Level: {len(sell_positions)+1}, Lot: {dynamic_lot}")
-                 result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, dynamic_lot, current_bid)
+                 cycle_id_val = str(min(sell_positions, key=lambda x: x.time).ticket)
+                 result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, dynamic_lot, current_bid, atr_value=current_atr, rsi_value=None, grid_level=len(sell_positions)+1, cycle_id=cycle_id_val)
                  if result:
                      latest_p = max(sell_positions, key=lambda p: p.time)
                      dist_moved = abs(current_bid - latest_p.price_open) / ag.symbol_info(config.SYMBOL).point

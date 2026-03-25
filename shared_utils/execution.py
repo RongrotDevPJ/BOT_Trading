@@ -2,11 +2,14 @@ import logging
 import MetaTrader5 as ag
 import config
 from shared_utils.notifier import send_telegram_message
+from shared_utils.db_manager import DBManager
+import time
 
 class TradeExecutor:
     def __init__(self, mt5_client):
         self.logger = logging.getLogger(__name__)
         self.mt5_client = mt5_client
+        self.db = DBManager()
 
     def normalize_price(self, price, symbol):
         """Rounds price to the correct number of decimal places for the symbol."""
@@ -60,7 +63,8 @@ class TradeExecutor:
             
         return True
 
-    def send_order(self, symbol, order_type, lot, price, sl=0.0, tp=0.0):
+    def send_order(self, symbol, order_type, lot, price, sl=0.0, tp=0.0,
+                   atr_value=None, rsi_value=None, grid_level=None, cycle_id=None):
         """Sends a market order and handles common errors."""
         
         # Verify spread before sending order
@@ -98,14 +102,43 @@ class TradeExecutor:
 
         # Send the order
         self.logger.info(f"Sending Order Request: Type={order_type}, Lot={lot}, Price={price}")
+        start_time = time.perf_counter()
         result = ag.order_send(request)
+        exec_time_ms = int((time.perf_counter() - start_time) * 1000)
 
         if result is None:
             self.logger.error("order_send() returned None. Terminal disconnected or failed.")
             return None
 
         # Handle retcodes
-        return self._handle_retcode(result, request)
+        handled_result = self._handle_retcode(result, request)
+        if handled_result:
+            side = "BUY" if order_type == ag.ORDER_TYPE_BUY else "SELL"
+            slippage = 0.0
+            if order_type == ag.ORDER_TYPE_BUY:
+                slippage = handled_result.price - price
+            elif order_type == ag.ORDER_TYPE_SELL:
+                slippage = price - handled_result.price
+                
+            info = ag.symbol_info(symbol)
+            if info:
+                # Convert slippage to points for readability if preferred, or leave as price delta. We will leave as real difference.
+                pass
+
+            self.db.log_open_trade(
+                ticket=handled_result.order,
+                symbol=symbol,
+                side=side,
+                open_price=handled_result.price,
+                volume=handled_result.volume,
+                atr=atr_value,
+                rsi=rsi_value,
+                grid_level=grid_level,
+                cycle_id=cycle_id if cycle_id is not None else str(handled_result.order),
+                slippage=slippage,
+                exec_time_ms=exec_time_ms
+            )
+        return handled_result
 
     def modify_sl(self, ticket, symbol, new_sl):
          """Modifies the stop loss of an existing order."""

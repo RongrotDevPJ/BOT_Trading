@@ -44,7 +44,16 @@ class DBManager:
             tp REAL,
             profit REAL DEFAULT 0.0,
             spread REAL,
-            comment TEXT
+            comment TEXT,
+            status TEXT,
+            mae REAL,
+            mfe REAL,
+            atr_value REAL,
+            rsi_value REAL,
+            grid_level INTEGER,
+            cycle_id TEXT,
+            slippage REAL,
+            exec_time_ms INTEGER
         );
         """
         conn = self.get_connection()
@@ -54,8 +63,15 @@ class DBManager:
                     cursor.execute(sql_create_trades_table)
                     cursor.execute("PRAGMA table_info(trades)")
                     columns = [row[1] for row in cursor.fetchall()]
-                    if 'spread' not in columns:
-                        cursor.execute("ALTER TABLE trades ADD COLUMN spread REAL")
+                    new_cols = ['spread', 'status', 'mae', 'mfe', 'atr_value', 'rsi_value', 'grid_level', 'cycle_id', 'slippage', 'exec_time_ms']
+                    for col in new_cols:
+                        if col not in columns:
+                            if col in ['status', 'cycle_id']:
+                                cursor.execute(f"ALTER TABLE trades ADD COLUMN {col} TEXT")
+                            elif col in ['grid_level', 'exec_time_ms']:
+                                cursor.execute(f"ALTER TABLE trades ADD COLUMN {col} INTEGER")
+                            else:
+                                cursor.execute(f"ALTER TABLE trades ADD COLUMN {col} REAL")
                     cursor.execute("CREATE INDEX IF NOT EXISTS idx_symbol_timestamp ON trades(symbol, timestamp);")
                 conn.commit()
                 self.logger.info("Database initialized successfully.")
@@ -84,25 +100,76 @@ class DBManager:
             finally:
                 conn.close()
 
-    def sync_deals(self, deals):
+    def log_open_trade(self, ticket, symbol, side, open_price, volume, atr, rsi, grid_level, cycle_id, slippage, exec_time_ms, comment=""):
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        sql = """
+        INSERT OR REPLACE INTO trades (timestamp, symbol, action, ticket, side, price, lots, atr_value, rsi_value, grid_level, cycle_id, slippage, exec_time_ms, status, comment)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)
+        """
+        conn = self.get_connection()
+        if conn:
+            try:
+                with closing(conn.cursor()) as cursor:
+                    cursor.execute(sql, (timestamp, symbol, 'ENTRY', ticket, side, open_price, volume, atr, rsi, grid_level, cycle_id, slippage, exec_time_ms, comment))
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                self.logger.error(f"Error logging open trade to DB: {e}")
+            finally:
+                conn.close()
+
+    def log_closed_trade_update(self, ticket, close_price, profit, mfe, mae):
+        sql = """
+        UPDATE trades 
+        SET status = 'CLOSED', profit = ?, mae = ?, mfe = ?, action = 'DEAL_OUT'
+        WHERE ticket = ?
+        """
+        conn = self.get_connection()
+        if conn:
+            try:
+                with closing(conn.cursor()) as cursor:
+                    cursor.execute(sql, (profit, mae, mfe, ticket))
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                self.logger.error(f"Error updating closed trade DB: {e}")
+            finally:
+                conn.close()
+
+    def sync_deals(self, deals, active_excursions=None):
         """Syncs multiple MT5 history deals into the database."""
         if not deals:
             return
             
-        sql = """
-        INSERT OR IGNORE INTO trades (timestamp, symbol, action, ticket, side, price, lots, profit, comment)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        sql_update = """
+        UPDATE trades 
+        SET status = 'CLOSED', profit = ?, mae = ?, mfe = ?, action = 'DEAL_OUT'
+        WHERE ticket = ?
+        """
+        sql_insert = """
+        INSERT OR IGNORE INTO trades (timestamp, symbol, action, ticket, side, price, lots, profit, comment, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'CLOSED')
         """
         conn = self.get_connection()
         if conn:
             try:
                 with closing(conn.cursor()) as cursor:
                     for d in deals:
-                        timestamp = datetime.fromtimestamp(d.time).strftime("%Y-%m-%d %H:%M:%S")
-                        side = "BUY" if d.type == 0 else "SELL"
-                        action = "DEAL_IN" if d.entry == 0 else "DEAL_OUT"
-                        total_pnl = d.profit + d.commission + d.swap
-                        cursor.execute(sql, (timestamp, d.symbol, action, d.ticket, side, d.price, d.volume, total_pnl, f"Magic:{d.magic} {d.comment}"))
+                        if d.entry == 1: # DEAL_OUT corresponds to closing out a position
+                            total_pnl = d.profit + d.commission + d.swap
+                            mae = 0.0
+                            mfe = 0.0
+                            if active_excursions and d.position_id in active_excursions:
+                                mae = active_excursions[d.position_id].get('mae', 0.0)
+                                mfe = active_excursions[d.position_id].get('mfe', 0.0)
+                            
+                            cursor.execute(sql_update, (total_pnl, mae, mfe, d.position_id))
+                            
+                            if cursor.rowcount == 0:
+                                timestamp = datetime.fromtimestamp(d.time).strftime("%Y-%m-%d %H:%M:%S")
+                                # The outgoing deal direction is the opposite of the position's true direction, but we usually log the side context.
+                                side = "SELL" if d.type == 0 else "BUY" 
+                                cursor.execute(sql_insert, (timestamp, d.symbol, 'DEAL_OUT', d.position_id, side, d.price, d.volume, total_pnl, f"Magic:{d.magic} {d.comment}", 'CLOSED'))
                 conn.commit()
             except Exception as e:
                 conn.rollback()

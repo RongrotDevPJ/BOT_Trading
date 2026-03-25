@@ -3,6 +3,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 import logging
 import pytz
+import time
 
 logger = logging.getLogger("NewsFilter")
 
@@ -12,6 +13,7 @@ class NewsFilter:
         self.safe_buffer_min = safe_buffer_min
         self.news_events = []
         self.last_update = datetime.min
+        self.last_warning_time = 0
         # IG.com API via DailyFX
         self.base_url = "https://api.ig.com/explore/events"
         self.headers = {
@@ -83,7 +85,7 @@ class NewsFilter:
                             currencies.append(item['currency'])
                         
                         metadata = item.get('metadata', {})
-                        if metadata and 'impactedCurrency' in metadata:
+                        if metadata and metadata.get('impactedCurrency'):
                             currencies.extend(metadata['impactedCurrency'])
                         
                         # Fallback to country mapping
@@ -136,7 +138,10 @@ class NewsFilter:
                 
                 # Check if we are in the "Forbidden zone"
                 if (event_time - buffer) <= now_utc <= (event_time + buffer):
-                    logger.warning(f"⚠️ NEWS FILTER ACTIVE: High Impact news '{event['title']}' ({', '.join(event['currencies'])}) at {event_time.strftime('%H:%M')} UTC. PAUSING.")
+                    current_time = time.time()
+                    if current_time - self.last_warning_time > 60:
+                        logger.warning(f"⚠️ NEWS FILTER ACTIVE: High Impact news '{event['title']}' ({', '.join(event['currencies'])}) at {event_time.strftime('%H:%M')} UTC. PAUSING.")
+                        self.last_warning_time = current_time
                     return False
 
         return True

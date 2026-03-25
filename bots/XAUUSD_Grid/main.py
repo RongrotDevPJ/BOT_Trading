@@ -135,7 +135,7 @@ def main():
                     # 2. Symbol-specific (for Detailed Display)
                     deals = client.get_history_deals(symbol=config.SYMBOL, magic=config.MAGIC_NUMBER, days=0)
                     # Sync deals to SQLite for accurate persistent history
-                    strategy.csv_logger.db_manager.sync_deals(deals)
+                    strategy.csv_logger.db_manager.sync_deals(deals, active_excursions=strategy.active_excursions)
                     symbol_realized_profit = sum(d.profit + d.commission + d.swap for d in deals)
                     
                     open_pos = client.get_open_positions(symbol=config.SYMBOL, magic=config.MAGIC_NUMBER)
@@ -206,6 +206,22 @@ def main():
                         logger.warning(f"Waiting for tick data for {config.SYMBOL}... (Market might be closed or symbol not in Market Watch)")
                     time.sleep(1)
                     continue
+
+                # MAE/MFE Tracker
+                positions = strategy.get_positions()
+                if positions:
+                    point = client.get_symbol_info(config.SYMBOL).point
+                    for p in positions:
+                        if p.ticket not in strategy.active_excursions:
+                            strategy.active_excursions[p.ticket] = {'mfe': -1000000.0, 'mae': 1000000.0}
+                        if p.type == 0: # BUY
+                            current_pts = (tick.bid - p.price_open) / point
+                        else: # SELL
+                            current_pts = (p.price_open - tick.ask) / point
+                        if current_pts > strategy.active_excursions[p.ticket]['mfe']:
+                            strategy.active_excursions[p.ticket]['mfe'] = current_pts
+                        if current_pts < strategy.active_excursions[p.ticket]['mae']:
+                            strategy.active_excursions[p.ticket]['mae'] = current_pts
 
                 # --- Daily Equity Target Logic ---
                 current_server_time = datetime.datetime.fromtimestamp(tick.time) if tick else datetime.datetime.now()
@@ -288,7 +304,7 @@ def main():
 
                 # Check Time Filter AND Daily Target AND News Filter before allowing NEW initial entries
                 if not daily_target_reached and time_filter.is_allowed_to_trade() and is_news_safe(config.SYMBOL):
-                    strategy.check_initial_entry(executor, current_rsi, current_ema, tick, current_stoch=current_stoch)
+                    strategy.check_initial_entry(executor, current_rsi, current_ema, tick, current_stoch=current_stoch, current_atr=current_atr)
 
                 # Execute grid logic (Always allowed even if target reached, to close existing grid)
                 strategy.check_grid_logic(executor, current_atr, current_ema)
