@@ -169,7 +169,7 @@ class DBManager:
                                 timestamp = datetime.fromtimestamp(d.time).strftime("%Y-%m-%d %H:%M:%S")
                                 # The outgoing deal direction is the opposite of the position's true direction, but we usually log the side context.
                                 side = "SELL" if d.type == 0 else "BUY" 
-                                cursor.execute(sql_insert, (timestamp, d.symbol, 'DEAL_OUT', d.position_id, side, d.price, d.volume, total_pnl, f"Magic:{d.magic} {d.comment}", 'CLOSED'))
+                                cursor.execute(sql_insert, (timestamp, d.symbol, 'DEAL_OUT', d.position_id, side, d.price, d.volume, total_pnl, f"Magic:{d.magic} {d.comment}"))                            
                 conn.commit()
             except Exception as e:
                 conn.rollback()
