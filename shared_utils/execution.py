@@ -121,9 +121,8 @@ class TradeExecutor:
                 slippage = price - handled_result.price
                 
             info = ag.symbol_info(symbol)
-            if info:
-                # Convert slippage to points for readability if preferred, or leave as price delta. We will leave as real difference.
-                pass
+            if info and info.point > 0:
+                slippage = round(slippage / info.point, 1) # Convert to Points
 
             self.db.log_open_trade(
                 ticket=handled_result.order,

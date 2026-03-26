@@ -162,6 +162,7 @@ class DBManager:
                             if active_excursions and d.position_id in active_excursions:
                                 mae = active_excursions[d.position_id].get('mae', 0.0)
                                 mfe = active_excursions[d.position_id].get('mfe', 0.0)
+                                del active_excursions[d.position_id] # Prevent memory leak
                             
                             cursor.execute(sql_update, (total_pnl, mae, mfe, d.position_id))
                             
