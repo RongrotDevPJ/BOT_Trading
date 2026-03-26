@@ -23,24 +23,11 @@ from strategy import SmartGridStrategy
 from shared_utils.global_risk_manager import check_global_drawdown, is_trading_suspended
 from shared_utils.notifier import send_telegram_message
 from shared_utils.news_filter import is_safe_to_trade as is_news_safe
+from shared_utils.system_logger import setup_logger
 
-# Setup Logging
-log_dir = project_root / "Log_HistoryOrder" / "Text_Logs"
-log_dir.mkdir(parents=True, exist_ok=True)
-log_filename = log_dir / f"{config.SYMBOL}_bot.log"
-
-file_handler = TimedRotatingFileHandler(str(log_filename), when="midnight", interval=1, backupCount=7, encoding='utf-8')
-file_handler.setLevel(logging.INFO)
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.WARNING)
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[file_handler, console_handler],
-    force=True
-)
-logger = logging.getLogger("MainControl")
+# Setup Persistent Logging
+logger = setup_logger(f"{config.SYMBOL}_Bot")
+logger.info(f"System Logger initialized for {config.SYMBOL}")
 
 # Custom handler to capture latest log
 class LatestLogHandler(logging.Handler):
@@ -314,7 +301,7 @@ def main():
                 executor.manage_partial_close(positions, tick)
                 # Apply Break-Even and Trailing Stop
                 executor.apply_break_even(config.SYMBOL, activation_points=300, lock_points=20)
-                executor.apply_trailing_stop(config.SYMBOL, trailing_step=50)
+                executor.apply_trailing_stop(config.SYMBOL, atr=current_atr)
 
             except Exception as e:
                 logger.error(f"Error during strategy execution: {e}", exc_info=True)

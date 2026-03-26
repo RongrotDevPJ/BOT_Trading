@@ -19,6 +19,7 @@ LOT_MULTIPLIER = 1.1 # Multiply lot size cautiously for each grid level
 MAX_LOT = 0.5 # Maximum lot size allowed to protect Cent account
 BASKET_TP_POINTS = 50 # Break-even profit target (25 Pips)
 MIN_GRID_DISTANCE_POINTS = 200 # Minimum distance for dynamic ATR grid
+MAX_GRID_LEVELS = 4             # Strict grid level capping
 ENABLE_ATR_DISTANCE = True    # Enable ATR-based dynamic grid distance
 
 # --- Indicators & Filters Setup ---

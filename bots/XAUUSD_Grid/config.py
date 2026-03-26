@@ -4,7 +4,7 @@ MAGIC_NUMBER = 222222 # Different from EURUSD
 
 # --- Trading Mode ---
 START_LOT = 0.05 # Base lot size for the first trade
-MAX_DEVIATION = 100 # Allow 100 points slippage for Gold volatility
+MAX_DEVIATION = 20 # Strict slippage control (20 points)
 
 # --- Risk Management & Auto-Lot ---
 AUTO_LOT = True             # Enable dynamic lot sizing based on equity
@@ -19,6 +19,7 @@ LOT_MULTIPLIER = 1.1 # Multiply lot size cautiously for each grid level
 MAX_LOT = 0.5 # Maximum lot size allowed to protect Cent account
 BASKET_TP_POINTS = 250 # Break-even profit target (25 Pips)
 MIN_GRID_DISTANCE_POINTS = 700 # Minimum distance for dynamic ATR grid
+MAX_GRID_LEVELS = 4             # Strict grid level capping
 ENABLE_ATR_DISTANCE = True    # Enable ATR-based dynamic grid distance
 
 # --- Indicators & Filters Setup ---

@@ -205,9 +205,10 @@ class TradeExecutor:
                         self.modify_sl(p.ticket, symbol, target_sl)
                         self.logger.info(f"💎 BE: Moved SELL SL for {p.ticket} to {target_sl}")
 
-    def apply_trailing_stop(self, symbol, trailing_step=50):
+    def apply_trailing_stop(self, symbol, atr=None):
         """
-        Moves SL every 'trailing_step' points in the direction of profit.
+        Moves SL dynamically based on ATR or fixed steps.
+        If ATR is provided: trail_dist = ATR * 1.5, step_dist = ATR * 0.5.
         Trailing Step ensures we don't spam modifications too often.
         """
         positions = ag.positions_get(symbol=symbol)
@@ -220,8 +221,20 @@ class TradeExecutor:
             return
 
         point = info.point
-        step_dist = trailing_step * point
-        trail_dist = step_dist 
+        
+        # Determine step and trail distances
+        if atr is not None and atr > 0:
+            # Dynamic ATR-based distances
+            trail_dist = atr * 1.5
+            step_dist = atr * 0.5
+            # Use points for comparison to keep logic consistent
+            step_dist_points = step_dist / point
+            self.logger.debug(f"ATR Trailing Stop ({symbol}): Trail={trail_dist:.5f}, Step={step_dist:.5f}")
+        else:
+            # Fallback to fixed points from config
+            step_dist_points = getattr(config, 'TRAILING_STEP_POINTS', 50)
+            step_dist = step_dist_points * point
+            trail_dist = getattr(config, 'TRAILING_STOP_POINTS', 50) * point
 
         for p in positions:
             if p.magic != config.MAGIC_NUMBER: 
@@ -385,12 +398,18 @@ class TradeExecutor:
         elif code == ag.TRADE_RETCODE_INVALID_STOPS:
             self.logger.error(f"Invalid stops (SL/TP) error. Given SL:{request.get('sl')} TP:{request.get('tp')}")
         elif code == ag.TRADE_RETCODE_TRADE_DISABLED:
-            self.logger.error("Trading disabled for this symbol or account.")
+            self.logger.error(f"❌ CRITICAL: Trading is DISABLED for {request.get('symbol')} on this account/broker. Check if the terminal has trading permissions.")
+            time.sleep(2) # Slow down spam
+        elif code == 10027: # TRADE_RETCODE_AUTOTRADING_DISABLED
+            self.logger.error("❌ CRITICAL: 'Algo Trading' is DISABLED in MT5. Please click the 'Algo Trading' button in the top toolbar to enable it.")
+            time.sleep(2) # Slow down spam
         elif code == ag.TRADE_RETCODE_MARKET_CLOSED:
             # Important for handling weekends
             self.logger.warning("Market is closed.")
+            time.sleep(1) # Slow down spam
         elif code == ag.TRADE_RETCODE_NO_MONEY:
-            self.logger.error("Not enough money to open position.")
+            self.logger.error("❌ CRITICAL: Not enough money to open position.")
+            time.sleep(5) # Severe error, slow down significantly
         elif code == ag.TRADE_RETCODE_PRICE_CHANGED:
             self.logger.warning("Requote: Price changed.")
             # We could optionally implement retry logic here.
@@ -399,10 +418,12 @@ class TradeExecutor:
         elif code == ag.TRADE_RETCODE_CONNECTION:
              self.logger.error("No connection to broker.")
         elif code == 10025: # TRADE_RETCODE_NO_CHANGES
-             self.logger.debug(f"Modification ignored (Error 10025): TP/SL is already at requested value for Ticket {request.get('position', 'unknown')}.")
+             self.logger.debug(f"Modification ignored (Error 10025): TP/SL is already at requested value.")
         elif code == 10044: # TRADE_RETCODE_CLOSE_ONLY
              self.logger.error(f"Only position closing is allowed for {request.get('symbol')} (Error 10044). Broker restriction.")
+             time.sleep(2)
         else:
              self.logger.error(f"Trade failed with unknown error code: {code}. Result: {result}")
+             time.sleep(0.5)
         
         return None

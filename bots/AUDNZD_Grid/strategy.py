@@ -100,10 +100,11 @@ class SmartGridStrategy:
          bot_positions = [p for p in positions if p.magic == config.MAGIC_NUMBER]
          return bot_positions
 
-    def calculate_basket_tp(self, positions, side):
+    def calculate_basket_tp(self, positions, side, use_be=False):
         """
         Calculates the uniform basket Take Profit price for a group of positions.
         side: 0 for Buy, 1 for Sell
+        use_be: If True, returns exact break-even (0 profit)
         """
         if not positions:
             return 0.0
@@ -115,6 +116,9 @@ class SmartGridStrategy:
         # Calculate break-even price (volume-weighted average price)
         total_value = sum(p.price_open * p.volume for p in positions)
         break_even_price = total_value / total_volume
+
+        if use_be:
+            return break_even_price
 
         point = ag.symbol_info(config.SYMBOL).point
         
@@ -246,6 +250,10 @@ class SmartGridStrategy:
         if not positions or current_ema is None:
            return False
 
+        # Hard Grid Level Capping
+        if len(positions) >= getattr(config, 'MAX_GRID_LEVELS', 10):
+            return False
+
         # Find the most recently opened position in this direction
         latest_position = max(positions, key=lambda p: p.time)
         
@@ -325,6 +333,7 @@ class SmartGridStrategy:
 
         # Process Buy Grid
         if buy_positions:
+            max_levels = getattr(config, 'MAX_GRID_LEVELS', 10)
             if self.needs_new_grid_level(buy_positions, current_ask, side=0, current_atr=current_atr, current_ema=current_ema):
                 dynamic_lot = self.get_dynamic_lot(len(buy_positions))
                 self.logger.info(f"🛒 Executing BUY Grid. Level: {len(buy_positions)+1}, Lot: {dynamic_lot}")
@@ -336,12 +345,18 @@ class SmartGridStrategy:
                     req_dist = self.get_dynamic_grid_distance(len(buy_positions), current_atr)
                     self.csv_logger.log_event(action="Grid Open", side="BUY", price=current_ask, atr=current_atr, ema=current_ema, grid_level=len(buy_positions)+1, lot_size=dynamic_lot, distance_moved=dist_moved, required_distance=req_dist, ticket=result.order)
                 
-            if not config.USE_TRAILING_STOP:
-                new_tp = self.calculate_basket_tp(buy_positions, side=0)
+            # TP Management
+            use_be = len(buy_positions) >= max_levels
+            if use_be:
+                self.logger.warning(f"⚠️ MAX GRID LEVELS REACHED ({len(buy_positions)}). Shifting BUY TP to Break-Even.")
+            
+            if not config.USE_TRAILING_STOP or use_be:
+                new_tp = self.calculate_basket_tp(buy_positions, side=0, use_be=use_be)
                 self._update_tps_if_needed(executor, buy_positions, new_tp)
 
         # Process Sell Grid
         if sell_positions:
+             max_levels = getattr(config, 'MAX_GRID_LEVELS', 10)
              if self.needs_new_grid_level(sell_positions, current_bid, side=1, current_atr=current_atr, current_ema=current_ema):
                  dynamic_lot = self.get_dynamic_lot(len(sell_positions))
                  self.logger.info(f"🛒 Executing SELL Grid. Level: {len(sell_positions)+1}, Lot: {dynamic_lot}")
@@ -353,8 +368,12 @@ class SmartGridStrategy:
                      req_dist = self.get_dynamic_grid_distance(len(sell_positions), current_atr)
                      self.csv_logger.log_event(action="Grid Open", side="SELL", price=current_bid, atr=current_atr, ema=current_ema, grid_level=len(sell_positions)+1, lot_size=dynamic_lot, distance_moved=dist_moved, required_distance=req_dist, ticket=result.order)
                  
-             if not config.USE_TRAILING_STOP:
-                 new_tp = self.calculate_basket_tp(sell_positions, side=1)
+             use_be = len(sell_positions) >= max_levels
+             if use_be:
+                 self.logger.warning(f"⚠️ MAX GRID LEVELS REACHED ({len(sell_positions)}). Shifting SELL TP to Break-Even.")
+
+             if not config.USE_TRAILING_STOP or use_be:
+                 new_tp = self.calculate_basket_tp(sell_positions, side=1, use_be=use_be)
                  self._update_tps_if_needed(executor, sell_positions, new_tp)
              
     def _update_tps_if_needed(self, executor, positions, new_tp):
