@@ -1,4 +1,5 @@
 import MetaTrader5 as mt5
+from datetime import datetime
 import logging
 import os
 from pathlib import Path
@@ -36,11 +37,13 @@ def check_global_drawdown(max_dd_percent=15.0):
 
     return False
 
-def trigger_emergency_close():
+def trigger_emergency_close(reason="Unknown", trigger_bot="Unknown"):
     """Closes every single open position on the account and creates a lock file."""
     # Create the lock file immediately to stop other bots from opening new trades
     with open(STOP_FLAG_PATH, "w") as f:
-        f.write(f"Global Kill Switch activated at {mt5.symbol_info_tick('XAUUSD').time if mt5.symbol_info_tick('XAUUSD') else 'unknown time'}")
+        f.write(f"Global Kill Switch activated at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"Triggered by: {trigger_bot}\n")
+        f.write(f"Reason: {reason}\n")
 
     positions = mt5.positions_get()
     if positions:

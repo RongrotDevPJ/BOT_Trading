@@ -139,8 +139,11 @@ class SmartGridStrategy:
             return
 
         positions = self.get_positions()
-        if len(positions) > 0:
-            return # Grid is already active, do not open primary entry
+        buy_positions = [p for p in positions if p.type == 0]
+        sell_positions = [p for p in positions if p.type == 1]
+        
+        if len(buy_positions) > 0 or len(sell_positions) > 0:
+            return # A trade cycle is already active. Strictly block new Initial entries.
 
         # Check News Filter (Phase 2)
         if not is_safe_to_trade(config.SYMBOL):

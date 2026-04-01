@@ -89,6 +89,14 @@ def main():
                 client.connect() 
                 continue
 
+            # 1.1 Weekend Sleep Mode (Phase 5)
+            if time_filter.is_weekend():
+                if current_time - last_ui_data_update >= 3600:
+                    logger.info("💤 Weekend Mode: Broker gap detected. Sleeping for 1 hour...")
+                    last_ui_data_update = current_time
+                time.sleep(60) # Wake up every min to check if weekend finished, but don't do snapshots
+                continue
+
             # 1.1 Global Risk Check (Phase 1)
             if is_trading_suspended():
                 if current_time - last_ui_data_update >= 10:
@@ -96,10 +104,30 @@ def main():
                 time.sleep(10)
                 continue
 
-            if check_global_drawdown(max_dd_percent=getattr(config, 'MAX_DD_PERCENT', 15.0)):
-                send_telegram_message(f"🚨 <b>CRITICAL: Global Kill Switch Triggered!</b>\nAccount Drawdown exceeded limit. All positions closed.")
-                logger.critical("Global Kill Switch activated! Trading stopped.")
-                continue
+            # Soft Stop & Global Kill Switch
+            account_info = client.get_account_info()
+            if account_info:
+                balance = account_info.balance
+                equity = account_info.equity
+                current_dd = ((balance - equity) / balance) * 100 if balance > 0 else 0
+                max_dd_limit = getattr(config, 'MAX_DD_PERCENT', 15.0)
+                soft_stop_limit = max_dd_limit * 0.7
+                
+                # Check Global Hard Kill Switch
+                if current_dd > max_dd_limit:
+                    reason = f"Account Drawdown hit {current_dd:.2f}% (Limit: {max_dd_limit}%)"
+                    from shared_utils.global_risk_manager import trigger_emergency_close
+                    trigger_emergency_close(reason=reason, trigger_bot=config.SYMBOL)
+                    send_telegram_message(f"🚨 <b>CRITICAL: Global Kill Switch Triggered by {config.SYMBOL}!</b>\n{reason}. All positions closed.")
+                    logger.critical(f"Global Kill Switch activated by {config.SYMBOL}! Trading stopped. Reason: {reason}")
+                    continue
+
+                # Check Soft Stop
+                close_only_mode = False
+                if current_dd > soft_stop_limit:
+                    close_only_mode = True
+                    if current_time - last_ui_data_update >= 60:
+                        logger.warning(f"⚠️ SOFT STOP ACTIVE: DD at {current_dd:.2f}% (> {soft_stop_limit:.2f}%). Entering Close-Only mode.")
                 
             mt5_status = "CONNECTED" if client.is_connected() else "DISCONNECTED"
             
@@ -286,15 +314,31 @@ def main():
                     
                 # --- Permanent CSV Market Snapshot (Every 1 Hour) ---
                 if current_time - last_csv_snapshot_log > 3600:
-                    strategy.csv_logger.log_event(action="Market Snapshot", price=tick.ask, spread=current_spread, rsi=current_rsi, atr=current_atr, ema=current_ema, notes=f"Spread:{current_spread}")
+                    strategy.csv_logger.log_event(
+                        action="Market Snapshot", 
+                        price=tick.ask, 
+                        spread=current_spread, 
+                        rsi=current_rsi, 
+                        atr=current_atr, 
+                        ema=current_ema, 
+                        drawdown=cached_acc_drawdown_pct,
+                        balance=cached_balance,
+                        equity=cached_equity,
+                        notes=f"Spread:{current_spread}"
+                    )
                     last_csv_snapshot_log = current_time
 
                 # Check Time Filter AND Daily Target AND News Filter before allowing NEW initial entries
-                if not daily_target_reached and time_filter.is_allowed_to_trade() and is_news_safe(config.SYMBOL):
+                if not daily_target_reached and not close_only_mode and time_filter.is_allowed_to_trade() and is_news_safe(config.SYMBOL):
                     strategy.check_initial_entry(executor, current_rsi, current_ema, tick, current_stoch=current_stoch, current_atr=current_atr)
 
                 # Execute grid logic (Always allowed even if target reached, to close existing grid)
-                strategy.check_grid_logic(executor, current_atr, current_ema)
+                # However, if SOFT STOP (close_only_mode) is active, we don't open NEW grid levels
+                if not close_only_mode:
+                    strategy.check_grid_logic(executor, current_atr, current_ema)
+                else:
+                    # In Soft Stop, we still check is_max_drawdown_reached to keep it consistent
+                    strategy.is_max_drawdown_reached(executor, tick)
                 
                 # Manage positions (Phase 3)
                 executor.ghost_close_check(positions, tick, strategy)

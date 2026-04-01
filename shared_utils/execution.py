@@ -42,7 +42,7 @@ class TradeExecutor:
             
         spread = info.spread
         if spread > config.MAX_ALLOWED_SPREAD:
-            self.logger.warning(f"Spread {spread} exceeds max limit {config.MAX_ALLOWED_SPREAD}. Trade blocked.")
+            self.logger.warning(f"Spread too high ({spread}), entry rejected. (Limit: {config.MAX_ALLOWED_SPREAD})")
             return False
         return True
 

@@ -30,6 +30,12 @@ class TimeFilterClient:
         based on Time Filters (e.g., Friday late afternoon).
         Uses system/VPS compensated time.
         """
+        if self.is_weekend():
+            if not self.paused_logged:
+                self.logger.info("Weekend Mode Active: Trading and snapshots suspended.")
+                self.paused_logged = True
+            return False
+
         # Calculate effective time (Adjusted for VPS if needed)
         effective_now = datetime.now() + self.manual_compensation
         
@@ -59,3 +65,25 @@ class TimeFilterClient:
         # Reset flag when trading is allowed (not Friday or before stop hour)
         self.paused_logged = False
         return True
+
+    def is_weekend(self):
+        """
+        Returns True if current broker time is in the weekend gap.
+        Friday 23:55 to Monday 00:05.
+        """
+        now = datetime.now() + self.manual_compensation
+        day = now.weekday() # 4=Fri, 5=Sat, 6=Sun, 0=Mon
+        hour = now.hour
+        minute = now.minute
+
+        # Friday late night
+        if day == 4 and (hour > 23 or (hour == 23 and minute >= 55)):
+            return True
+        # Saturday and Sunday
+        if day == 5 or day == 6:
+            return True
+        # Monday early morning
+        if day == 0 and (hour == 0 and minute < 5):
+            return True
+            
+        return False

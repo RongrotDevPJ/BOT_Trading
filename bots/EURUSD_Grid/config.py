@@ -42,7 +42,7 @@ TRAILING_STOP_POINTS = 50 # Distance to trail (5 Pips)
 TRAILING_STEP_POINTS = 10 # Only move SL if profit increases by >= 10 points
 
 # --- Risk Management ---
-MAX_ALLOWED_SPREAD = 50 # Spread Guard limit
+MAX_ALLOWED_SPREAD = 40 # Spread Guard limit (Updated)
 ENABLE_DAILY_TARGET = False # Set to True to enable daily profit target (Close-Only)
 DAILY_TARGET_PERCENT = 15.0 # Stop trading for the day if equity grows by 15%
 MAX_DD_PERCENT = 30.0 # Stop trading if drawdown > 30%
