@@ -330,17 +330,18 @@ def main():
 
                 # Check Time Filter AND Daily Target AND News Filter before allowing NEW initial entries
                 if not daily_target_reached and not close_only_mode and time_filter.is_allowed_to_trade() and is_news_safe(config.SYMBOL):
-                    strategy.check_initial_entry(executor, current_rsi, current_ema, tick, current_stoch=current_stoch, current_atr=current_atr)
+                    strategy.check_initial_entry(executor, current_rsi, current_ema, tick, current_stoch=current_stoch, current_atr=current_atr, equity=cached_equity)
 
                 # Execute grid logic (Always allowed even if target reached, to close existing grid)
                 # However, if SOFT STOP (close_only_mode) is active, we don't open NEW grid levels
                 if not close_only_mode:
-                    strategy.check_grid_logic(executor, current_atr, current_ema)
+                    strategy.check_grid_logic(executor, current_atr, current_ema, equity=cached_equity)
                 else:
                     # In Soft Stop, we still check is_max_drawdown_reached to keep it consistent
                     strategy.is_max_drawdown_reached(executor, tick)
                 
-                # Manage positions (Phase 3)
+                # Manage positions (Phase 2 & 3)
+                strategy.check_basket_trailing(executor, tick)
                 executor.ghost_close_check(positions, tick, strategy)
                 executor.manage_partial_close(positions, tick)
                 # Apply Break-Even and Trailing Stop

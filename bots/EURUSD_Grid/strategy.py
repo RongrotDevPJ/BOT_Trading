@@ -24,6 +24,7 @@ class SmartGridStrategy:
         self.last_initial_log_time = 0 # Prevent initial entry log spam
         self.last_initial_entry_time = 0
         self.active_excursions = {}
+        self.max_basket_pnl = -1000000.0 # Phase 2: Track max floating PnL for basket trailing
 
     def is_max_drawdown_reached(self, executor, tick):
          """Checks if current account drawdown exceeds the max limit and performs Hedging if enabled."""
@@ -103,8 +104,7 @@ class SmartGridStrategy:
     def calculate_basket_tp(self, positions, side, use_be=False):
         """
         Calculates the uniform basket Take Profit price for a group of positions.
-        side: 0 for Buy, 1 for Sell
-        use_be: If True, returns exact break-even (0 profit)
+        Ensures a minimum profit of MIN_CYCLE_PROFIT_USC is reached.
         """
         if not positions:
             return 0.0
@@ -120,17 +120,30 @@ class SmartGridStrategy:
         if use_be:
             return break_even_price
 
-        point = ag.symbol_info(config.SYMBOL).point
+        symbol_info = ag.symbol_info(config.SYMBOL)
+        tick_size = symbol_info.trade_tick_size
+        tick_value = symbol_info.trade_tick_value # Profit of 1 lot per 1 tick move
+        point = symbol_info.point
         
-        # Calculate Basket TP
+        # Calculate movement needed for MIN_CYCLE_PROFIT_USC
+        # Profit = (Move / TickSize) * Volume * TickValue
+        # Move = (TargetProfit * TickSize) / (Volume * TickValue)
+        required_move = (config.MIN_CYCLE_PROFIT_USC * tick_size) / (total_volume * tick_value)
+        
+        # Standard movement from config
+        standard_move = config.BASKET_TP_POINTS * point
+        
+        # Ensure TP covers at least the minimum profit
+        final_move = max(standard_move, required_move)
+
         if side == 0: # Buy basket
-             basket_tp = break_even_price + (config.BASKET_TP_POINTS * point)
+             basket_tp = break_even_price + final_move
         else: # Sell basket
-             basket_tp = break_even_price - (config.BASKET_TP_POINTS * point)
+             basket_tp = break_even_price - final_move
              
         return basket_tp
 
-    def check_initial_entry(self, executor, current_rsi, current_ema, tick, current_stoch=None, current_atr=None):
+    def check_initial_entry(self, executor, current_rsi, current_ema, tick, current_stoch=None, current_atr=None, equity=0):
         """Checks RSI, Stochastic, and EMA to determine if a first trade should be opened."""
         if current_rsi is None or tick is None or current_ema is None:
             return
@@ -180,10 +193,12 @@ class SmartGridStrategy:
             if current_time - self.last_initial_log_time > 60:
                 self.logger.info(f"✨ [Analysis] Initial BUY Entry Triggered: RSI={current_rsi:.2f} <= {config.RSI_BUY_LEVEL} {stoch_str} {trend_str}")
                 self.last_initial_log_time = current_time
-            result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, config.START_LOT, tick.ask, atr_value=current_atr, rsi_value=current_rsi, grid_level=1, cycle_id=None)
+            
+            initial_lot = self.get_dynamic_lot(0, equity)
+            result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, initial_lot, tick.ask, atr_value=current_atr, rsi_value=current_rsi, grid_level=1, cycle_id=None)
             if result:
                 self.last_initial_entry_time = time.time()
-                self.csv_logger.log_event(action="Initial Entry", side="BUY", price=tick.ask, rsi=current_rsi, ema=current_ema, lot_size=config.START_LOT, ticket=result.order, notes=stoch_str)
+                self.csv_logger.log_event(action="Initial Entry", side="BUY", price=tick.ask, rsi=current_rsi, ema=current_ema, lot_size=initial_lot, ticket=result.order, notes=stoch_str)
             
         elif is_rsi_sell and is_trend_sell and is_stoch_sell:
             current_time = time.time()
@@ -191,10 +206,12 @@ class SmartGridStrategy:
             if current_time - self.last_initial_log_time > 60:
                 self.logger.info(f"✨ [Analysis] Initial SELL Entry Triggered: RSI={current_rsi:.2f} >= {config.RSI_SELL_LEVEL} {stoch_str} {trend_str}")
                 self.last_initial_log_time = current_time
-            result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, config.START_LOT, tick.bid, atr_value=current_atr, rsi_value=current_rsi, grid_level=1, cycle_id=None)
+            
+            initial_lot = self.get_dynamic_lot(0, equity)
+            result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, initial_lot, tick.bid, atr_value=current_atr, rsi_value=current_rsi, grid_level=1, cycle_id=None)
             if result:
                 self.last_initial_entry_time = time.time()
-                self.csv_logger.log_event(action="Initial Entry", side="SELL", price=tick.bid, rsi=current_rsi, ema=current_ema, lot_size=config.START_LOT, ticket=result.order, notes=stoch_str)
+                self.csv_logger.log_event(action="Initial Entry", side="SELL", price=tick.bid, rsi=current_rsi, ema=current_ema, lot_size=initial_lot, ticket=result.order, notes=stoch_str)
 
     def get_dynamic_grid_distance(self, num_positions, current_atr):
          """Calculates distance based on ATR * Multiplier or Fixed Points with smart multipliers."""
@@ -206,35 +223,30 @@ class SmartGridStrategy:
          else:
              base_distance = config.GRID_DISTANCE_POINTS
              
-         # Smart Dynamic Grid Distance Logic
-         # Orders 1-4 (num_positions 0-3): Base distance
-         # Orders 5-7 (num_positions 4-6): Base distance * 1.5
-         # Orders 8-10+ (num_positions >= 7): Base distance * 2.0
-         if num_positions < 4:
-             multiplier = 1.0
-         elif num_positions < 7:
-             multiplier = 1.5
-         else:
-             multiplier = 2.0
+         # Phase 2: Exponential Dynamic Grid Distance Multiplier
+         multiplier = config.GRID_DISTANCE_MULTIPLIER ** num_positions
              
          current_time = time.time()
          if current_time - self.last_dynamic_log_time > 60:
              atr_str = f"{current_atr:.5f}" if current_atr is not None else "0"
-             self.logger.info(f"🔍 [System Check] Dynamic Distance Layer {num_positions + 1}: BaseDist={base_distance:.1f}pts, Multiplier={multiplier}x => Required Distance={base_distance * multiplier:.1f}pts (ATR={atr_str})")
+             self.logger.info(f"🔍 [System Check] Dynamic Distance Layer {num_positions + 1}: BaseDist={base_distance:.1f}pts, Multiplier={multiplier:.2f}x => Required Distance={base_distance * multiplier:.1f}pts (ATR={atr_str})")
              self.last_dynamic_log_time = current_time
              
          return base_distance * multiplier
 
-    def get_dynamic_lot(self, num_positions):
-         """Calculates lot size based on equity and multiplier."""
-         # Calculate dynamic starting lot based on equity if enabled
-         equity = ag.account_info().equity if ag.account_info() else 0
-         
-         if getattr(config, 'AUTO_LOT', False) and equity > 0:
-             calculated_start_lot = (equity / config.CENTS_PER_01_LOT) * 0.01
-             base_lot = max(config.MIN_START_LOT, min(config.MAX_START_LOT, calculated_start_lot))
-         else:
-             base_lot = config.START_LOT
+    def calculate_dynamic_lot(self, current_equity):
+        """Phase 3: Cent-Account safe lot calculation."""
+        if not getattr(config, 'AUTO_LOT', False):
+            return config.DEFAULT_LOT
+        
+        # Scaling logic: BASE_LOT per BASE_EQUITY (e.g. 0.10 lot per $50)
+        raw_lot = (current_equity / config.BASE_EQUITY) * config.BASE_LOT
+        calculated_lot = round(raw_lot, 2)
+        return max(config.MIN_LOT, min(calculated_lot, config.MAX_LOT))
+
+    def get_dynamic_lot(self, num_positions, equity):
+         """Calculates lot size based on equity and grid multiplier."""
+         base_lot = self.calculate_dynamic_lot(equity)
 
          # If 1 open trade, num_positions=1, next lot is base * multiplier ^ 1
          lot = base_lot * (config.LOT_MULTIPLIER ** num_positions)
@@ -243,7 +255,7 @@ class SmartGridStrategy:
          if lot > config.MAX_LOT:
              lot = config.MAX_LOT
              
-         return lot
+         return max(config.MIN_LOT, lot)
 
     def needs_new_grid_level(self, positions, current_price, side, current_atr, current_ema):
         """
@@ -316,8 +328,8 @@ class SmartGridStrategy:
                         self.last_trend_log_time = current_time
                 
         return False
-        
-    def check_grid_logic(self, executor, current_atr, current_ema):
+
+    def check_grid_logic(self, executor, current_atr, current_ema, equity=0):
         """Core logic to check positions and open new grid levels."""
         
         tick = ag.symbol_info_tick(config.SYMBOL)
@@ -338,7 +350,7 @@ class SmartGridStrategy:
         if buy_positions:
             max_levels = getattr(config, 'MAX_GRID_LEVELS', 10)
             if self.needs_new_grid_level(buy_positions, current_ask, side=0, current_atr=current_atr, current_ema=current_ema):
-                dynamic_lot = self.get_dynamic_lot(len(buy_positions))
+                dynamic_lot = self.get_dynamic_lot(len(buy_positions), equity)
                 self.logger.info(f"🛒 Executing BUY Grid. Level: {len(buy_positions)+1}, Lot: {dynamic_lot}")
                 cycle_id_val = str(min(buy_positions, key=lambda x: x.time).ticket)
                 result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, dynamic_lot, current_ask, atr_value=current_atr, rsi_value=None, grid_level=len(buy_positions)+1, cycle_id=cycle_id_val)
@@ -361,7 +373,7 @@ class SmartGridStrategy:
         if sell_positions:
              max_levels = getattr(config, 'MAX_GRID_LEVELS', 10)
              if self.needs_new_grid_level(sell_positions, current_bid, side=1, current_atr=current_atr, current_ema=current_ema):
-                 dynamic_lot = self.get_dynamic_lot(len(sell_positions))
+                 dynamic_lot = self.get_dynamic_lot(len(sell_positions), equity)
                  self.logger.info(f"🛒 Executing SELL Grid. Level: {len(sell_positions)+1}, Lot: {dynamic_lot}")
                  cycle_id_val = str(min(sell_positions, key=lambda x: x.time).ticket)
                  result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, dynamic_lot, current_bid, atr_value=current_atr, rsi_value=None, grid_level=len(sell_positions)+1, cycle_id=cycle_id_val)
@@ -374,10 +386,37 @@ class SmartGridStrategy:
              use_be = len(sell_positions) >= max_levels
              if use_be:
                  self.logger.warning(f"⚠️ MAX GRID LEVELS REACHED ({len(sell_positions)}). Shifting SELL TP to Break-Even.")
-
+ 
              if not config.USE_TRAILING_STOP or use_be:
                  new_tp = self.calculate_basket_tp(sell_positions, side=1, use_be=use_be)
                  self._update_tps_if_needed(executor, sell_positions, new_tp)
+
+    def check_basket_trailing(self, executor, tick):
+        """
+        Tracks total floating PnL for the symbol and applies a trailing stop to the entire basket.
+        """
+        positions = self.get_positions()
+        if not positions:
+            self.max_basket_pnl = -1000000.0
+            return
+            
+        # Calculate total floating PnL including commission and swap
+        total_pnl = sum(p.profit + p.commission + p.swap for p in positions)
+        
+        # Start trailing if trigger reached
+        if total_pnl >= config.BASKET_TRAILING_TRIGGER_USD:
+            if total_pnl > self.max_basket_pnl:
+                self.max_basket_pnl = total_pnl
+                self.logger.info(f"📈 [Basket Trailing] New Max PnL detected: ${self.max_basket_pnl:.2f} (Trigger: ${config.BASKET_TRAILING_TRIGGER_USD:.2f})")
+                
+        # Check if trailing stop is hit
+        if self.max_basket_pnl > -1000000.0:
+            if total_pnl < self.max_basket_pnl - config.BASKET_TRAILING_STEP_USD:
+                self.logger.critical(f"🚀 [Basket Trailing] TRAILING STOP HIT! Current PnL: ${total_pnl:.2f} < Max (${self.max_basket_pnl:.2f}) - Step (${config.BASKET_TRAILING_STEP_USD:.2f}). Executing MARKET CLOSE ALL for {len(positions)} positions.")
+                # Execute Market Close All for these positions
+                for p in positions:
+                    executor.close_position(p, tick)
+                self.max_basket_pnl = -1000000.0
              
     def _update_tps_if_needed(self, executor, positions, new_tp):
          """Helper to iterate and modify TPs only if they differ significantly."""
@@ -388,4 +427,3 @@ class SmartGridStrategy:
          for p in positions:
              if abs(p.tp - new_tp) > tolerance:
                  executor.modify_tp(p.ticket, config.SYMBOL, new_tp)
-

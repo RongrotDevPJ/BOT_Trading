@@ -1,86 +1,67 @@
 # --- Bot Configuration ---
 SYMBOL = "EURGBP"
-MAGIC_NUMBER = 555555 # Different from EURUSD
+MAGIC_NUMBER = 333333 # Unique Magic Number
 
 # --- Trading Mode ---
-START_LOT = 0.10 # Base lot size for the first trade (Increased for higher profit)
-MAX_DEVIATION = 20 # Allow 100 points slippage for Gold volatility
+MAX_DEVIATION = 20 # Slippage allowance
 
-# --- Risk Management & Auto-Lot ---
-AUTO_LOT = True             # Enable dynamic lot sizing based on equity
-CENTS_PER_01_LOT = 500     # Equity required per 0.01 lot step (Decreased to increase lot size)
-MIN_START_LOT = 0.10        # Minimum allowed base lot
-MAX_START_LOT = 0.50        # Maximum allowed base lot
+# --- Risk Management & Auto-Lot (Phase 3 Optimized) ---
+AUTO_LOT = True              
+DEFAULT_LOT = 0.10           # Safe base lot for Cent
+BASE_EQUITY = 5000.0         # Milestone for scaling (5000 USC = $50)
+BASE_LOT = 0.10              # Lot per BASE_EQUITY
+MAX_LOT = 2.0                # Cap to prevent broker rejection
+MIN_LOT = 0.01
+MIN_CYCLE_PROFIT_USC = 15.0  # Minimum profit in cents per grid cycle
 
-# --- Smart Grid Settings ---
-GRID_DISTANCE_POINTS = 150 # Base distance fallback
-GRID_MULTIPLIER = 1.2 # Distance multiplier for each sub-level (Moderate for Gold)
-LOT_MULTIPLIER = 1.1 # Multiply lot size cautiously for each grid level
-MAX_LOT = 0.5 # Maximum lot size allowed to protect Cent account
-BASKET_TP_POINTS = 50 # Break-even profit target (25 Pips)
-MIN_GRID_DISTANCE_POINTS = 150 # Minimum distance for dynamic ATR grid
-MAX_GRID_LEVELS = 4             # Strict grid level capping
+# --- Grid Scaling ---
+LOT_MULTIPLIER = 1.5         # Multiply lot size for each grid level
+MAX_GRID_LEVELS = 10         # Maximum number of grid levels allowed
+
+# --- Dynamic Grid Settings ---
+GRID_DISTANCE_POINTS = 300   # Base distance fallback
+MIN_GRID_DISTANCE_POINTS = 250 # Minimum distance for dynamic ATR grid
 ENABLE_ATR_DISTANCE = True    # Enable ATR-based dynamic grid distance
+ATR_PERIOD = 14
+ATR_MULTIPLIER = 2.0
+MAX_GAP_MULTIPLIER = 4.0     # Pause if gap > 4x grid distance
+
+# --- Phase 2 Upgrades (Grid Multiplier & Basket Trailing) ---
+GRID_DISTANCE_MULTIPLIER = 1.3
+BASKET_TRAILING_TRIGGER_USD = 10.0
+BASKET_TRAILING_STEP_USD = 3.0
 
 # --- Indicators & Filters Setup ---
 import MetaTrader5 as ag
 TIMEFRAME = ag.TIMEFRAME_M5
 RSI_PERIOD = 14
-RSI_BUY_LEVEL = 35  # Trend confirmation (Oversold)
-RSI_SELL_LEVEL = 65 # Trend confirmation (Overbought)
+RSI_BUY_LEVEL = 35           # Buy trigger level
+RSI_SELL_LEVEL = 65          # Sell trigger level
 
-# Trend Filters
-ENABLE_TREND_FILTER = False # Turned off for sideways pairs
+# Trend Filter (EMA 200)
+ENABLE_TREND_FILTER = True
 EMA_PERIOD = 200
 EMA_TIMEFRAME = ag.TIMEFRAME_M15
-ATR_PERIOD = 14
-ATR_MULTIPLIER = 2.0
 
-# --- Advanced Exit Strategy ---
-USE_TRAILING_STOP = True
-TRAILING_STOP_POINTS = 50 # Distance to trail (5 Pips)
-TRAILING_STEP_POINTS = 10 # Only move SL if profit increases by >= 10 points
+# --- Exit Strategy ---
+BASKET_TP_POINTS = 50        # Strategy TP profit goal in points
+USE_TRAILING_STOP = True     # Use Break-Even and Trailing Stop
+TRAILING_STOP_POINTS = 50
+TRAILING_STEP_POINTS = 10
 
-# --- Risk Management ---
-MAX_ALLOWED_SPREAD = 50 # Spread Guard limit (Confirmed)
-ENABLE_DAILY_TARGET = False # Set to True to enable daily profit target (Close-Only)
-DAILY_TARGET_PERCENT = 15.0 # Stop trading for the day if equity grows by 15%
-MAX_DD_PERCENT = 30.0 # Stop trading if drawdown > 30%
-ENABLE_HEDGE_ON_DD = True # Auto hedge to lock port when DD > MAX_DD_PERCENT
-HEARTBEAT_INTERVAL_SEC = 300 # 5 minutes
-COOLDOWN_MINUTES = 15 # Wait at least 15 min between grid levels
-MAX_GAP_MULTIPLIER = 4.0 # Pause trading if gap exceeds 4x the grid distance (Crash Recovery)
-
-# --- Advanced Portfolio Protections ---
+# --- Advanced Protections ---
+MAX_ALLOWED_SPREAD = 80
 ENABLE_PARTIAL_CLOSE = True
-MIN_POSITIONS_FOR_PARTIAL = 5 # Start looking for Partial Close if holding 5+ positions
+MIN_POSITIONS_FOR_PARTIAL = 5
+MAX_DD_PERCENT = 30.0        # Max drawdown before safety actions
+ENABLE_HEDGE_ON_DD = True    # Auto-hedge if DD reached
+COOLDOWN_MINUTES = 15        # Minimum time between grid orders
 
 # --- Time Filter ---
 ALLOW_FRIDAY_TRADING = False
-FRIDAY_STOP_HOUR = 15 # Broker time to stop trading on Friday (e.g. 15:00)
+FRIDAY_STOP_HOUR = 15
 
-# MT5 Account Credentials
-# Automatically loads from .env in the root directory if it exists
-# Leave empty in .env to use the terminal already logged in
-import os
-from pathlib import Path
-
+# MT5 Account Credentials (Placeholder - Loaded from .env in main.py)
 MT5_SERVER = ""
 MT5_LOGIN = 0
 MT5_PASSWORD = ""
-
-env_path = Path(__file__).parent.parent.parent / ".env"
-if env_path.exists():
-    try:
-        with open(env_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if "=" in line and not line.startswith("#"):
-                    key, value = line.split("=", 1)
-                    key = key.strip()
-                    value = value.strip().strip("'\"")
-                    if key == "MT5_SERVER": MT5_SERVER = value
-                    elif key == "MT5_LOGIN": MT5_LOGIN = int(value or 0)
-                    elif key == "MT5_PASSWORD": MT5_PASSWORD = value
-    except Exception:
-        pass # Fallback to defaults if .env parsing fails
