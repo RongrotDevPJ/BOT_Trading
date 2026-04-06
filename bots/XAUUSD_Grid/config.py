@@ -56,6 +56,9 @@ MIN_POSITIONS_FOR_PARTIAL = 5
 MAX_DD_PERCENT = 30.0        # Max drawdown before safety actions
 ENABLE_HEDGE_ON_DD = True    # Auto-hedge if DD reached
 COOLDOWN_MINUTES = 15        # Minimum time between grid orders
+HEARTBEAT_INTERVAL_SEC = 300 # Log bot status every 5 mins
+ENABLE_DAILY_TARGET = False  # Set to True to enable daily profit target
+DAILY_TARGET_PERCENT = 15.0  # Stop trading for the day if equity grows by 15%
 
 # --- Time Filter ---
 ALLOW_FRIDAY_TRADING = False
