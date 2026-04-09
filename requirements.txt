@@ -3,3 +3,4 @@ python-dotenv
 psutil
 requests
 pytz
+pandas
