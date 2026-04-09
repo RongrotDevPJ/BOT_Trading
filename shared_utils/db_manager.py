@@ -2,6 +2,8 @@ import sqlite3
 import logging
 import random
 import time
+import queue
+import threading
 from datetime import datetime
 from pathlib import Path
 from contextlib import closing
@@ -14,19 +16,61 @@ class DBManager:
         self.db_dir = project_root / "Log_HistoryOrder"
         self.db_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = self.db_dir / "trading_data.db"
+        
+        # Initialize the database schema synchronously
         self.initialize_db()
+        
+        # Async Task Queue & Worker Thread
+        self.task_queue = queue.Queue()
+        self.worker_thread = threading.Thread(target=self._worker, daemon=True)
+        self.worker_thread.start()
+        self.logger.info("DB Logging Worker Thread started (Daemon).")
 
     def get_connection(self):
         """Returns a connection to the SQLite database with row factory enabled."""
         try:
-            conn = sqlite3.connect(str(self.db_path), timeout=20)
+            # Multi-process safety: set timeout to 30s to wait for locks
+            conn = sqlite3.connect(str(self.db_path), timeout=30.0)
             conn.row_factory = sqlite3.Row
+            # WAL mode is critical for concurrent multi-process access
             conn.execute('PRAGMA journal_mode=WAL;')
             conn.execute('PRAGMA synchronous=NORMAL;')
             return conn
         except Exception as e:
             self.logger.error(f"Error connecting to database: {e}")
             return None
+
+    def _worker(self):
+        """Background worker that processes write tasks asynchronously."""
+        # The worker maintains its own persistent connection for efficiency
+        conn = self.get_connection()
+        while True:
+            try:
+                task = self.task_queue.get()
+                if task is None: break
+                
+                func_name, args, kwargs = task
+                
+                # If connection dropped, try reconnecting
+                if conn is None: conn = self.get_connection()
+                
+                if func_name == "sql_execute":
+                    sql, params = args
+                    with closing(conn.cursor()) as cursor:
+                        cursor.execute(sql, params)
+                    conn.commit()
+                elif func_name == "sync_deals":
+                    self._execute_sync_deals(conn, *args)
+                elif func_name == "archive":
+                    self._execute_archive(conn, *args)
+                
+                self.task_queue.task_done()
+            except Exception as e:
+                self.logger.error(f"Worker iteration failed: {e}")
+                if conn: conn.rollback()
+                time.sleep(1) # Prevent rapid fire failure spam
+        
+        if conn: conn.close()
 
     def initialize_db(self):
         """Creates the trades table and ensures correct schema."""
@@ -82,65 +126,39 @@ class DBManager:
                 conn.close()
 
     def log_trade(self, action, symbol, ticket=None, side=None, price=0.0, lots=0.0, sl=0.0, tp=0.0, spread=0.0, profit=0.0, comment=""):
-        """Inserts a trade event record into the database."""
+        """Queues a trade event record into the database."""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         sql = """
         INSERT OR IGNORE INTO trades (timestamp, symbol, action, ticket, side, price, lots, sl, tp, spread, profit, comment)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
-        conn = self.get_connection()
-        if conn:
-            try:
-                with closing(conn.cursor()) as cursor:
-                    cursor.execute(sql, (timestamp, symbol, action, ticket, side, price, lots, sl, tp, spread, profit, comment))
-                conn.commit()
-            except Exception as e:
-                conn.rollback()
-                self.logger.error(f"Error logging trade to DB: {e}")
-            finally:
-                conn.close()
+        self.task_queue.put(("sql_execute", (sql, (timestamp, symbol, action, ticket, side, price, lots, sl, tp, spread, profit, comment)), {}))
 
     def log_open_trade(self, ticket, symbol, side, open_price, volume, atr, rsi, grid_level, cycle_id, slippage, exec_time_ms, comment=""):
+        """Queues an open trade record into the database."""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         sql = """
         INSERT OR REPLACE INTO trades (timestamp, symbol, action, ticket, side, price, lots, atr_value, rsi_value, grid_level, cycle_id, slippage, exec_time_ms, status, comment)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)
         """
-        conn = self.get_connection()
-        if conn:
-            try:
-                with closing(conn.cursor()) as cursor:
-                    cursor.execute(sql, (timestamp, symbol, 'ENTRY', ticket, side, open_price, volume, atr, rsi, grid_level, cycle_id, slippage, exec_time_ms, comment))
-                conn.commit()
-            except Exception as e:
-                conn.rollback()
-                self.logger.error(f"Error logging open trade to DB: {e}")
-            finally:
-                conn.close()
+        self.task_queue.put(("sql_execute", (sql, (timestamp, symbol, 'ENTRY', ticket, side, open_price, volume, atr, rsi, grid_level, cycle_id, slippage, exec_time_ms, comment)), {}))
 
     def log_closed_trade_update(self, ticket, close_price, profit, mfe, mae):
+        """Queues a closed trade update into the database."""
         sql = """
         UPDATE trades 
         SET status = 'CLOSED', profit = ?, mae = ?, mfe = ?, action = 'DEAL_OUT'
         WHERE ticket = ?
         """
-        conn = self.get_connection()
-        if conn:
-            try:
-                with closing(conn.cursor()) as cursor:
-                    cursor.execute(sql, (profit, mae, mfe, ticket))
-                conn.commit()
-            except Exception as e:
-                conn.rollback()
-                self.logger.error(f"Error updating closed trade DB: {e}")
-            finally:
-                conn.close()
+        self.task_queue.put(("sql_execute", (sql, (profit, mae, mfe, ticket)), {}))
 
     def sync_deals(self, deals, active_excursions=None):
-        """Syncs multiple MT5 history deals into the database."""
-        if not deals:
-            return
-            
+        """Queues a batch sync of deals."""
+        if not deals: return
+        self.task_queue.put(("sync_deals", (deals, active_excursions), {}))
+
+    def _execute_sync_deals(self, conn, deals, active_excursions):
+        """Internal execution of sync_deals inside the worker thread."""
         sql_update = """
         UPDATE trades 
         SET status = 'CLOSED', profit = ?, mae = ?, mfe = ?, action = 'DEAL_OUT'
@@ -150,33 +168,29 @@ class DBManager:
         INSERT OR IGNORE INTO trades (timestamp, symbol, action, ticket, side, price, lots, profit, comment, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'CLOSED')
         """
-        conn = self.get_connection()
-        if conn:
-            try:
-                with closing(conn.cursor()) as cursor:
-                    for d in deals:
-                        if d.entry == 1: # DEAL_OUT corresponds to closing out a position
-                            total_pnl = d.profit + getattr(d, 'commission', 0.0) + d.swap
-                            mae = 0.0
-                            mfe = 0.0
-                            if active_excursions and d.position_id in active_excursions:
-                                mae = active_excursions[d.position_id].get('mae', 0.0)
-                                mfe = active_excursions[d.position_id].get('mfe', 0.0)
-                                del active_excursions[d.position_id] # Prevent memory leak
-                            
-                            cursor.execute(sql_update, (total_pnl, mae, mfe, d.position_id))
-                            
-                            if cursor.rowcount == 0:
-                                timestamp = datetime.fromtimestamp(d.time).strftime("%Y-%m-%d %H:%M:%S")
-                                # The outgoing deal direction is the opposite of the position's true direction, but we usually log the side context.
-                                side = "SELL" if d.type == 0 else "BUY" 
-                                cursor.execute(sql_insert, (timestamp, d.symbol, 'DEAL_OUT', d.position_id, side, d.price, d.volume, total_pnl, f"Magic:{d.magic} {d.comment}"))                            
-                conn.commit()
-            except Exception as e:
-                conn.rollback()
-                self.logger.error(f"Error syncing deals to DB: {e}")
-            finally:
-                conn.close()
+        try:
+            with closing(conn.cursor()) as cursor:
+                for d in deals:
+                    if d.entry == 1: # DEAL_OUT
+                        total_pnl = d.profit + getattr(d, 'commission', 0.0) + d.swap
+                        mae = 0.0
+                        mfe = 0.0
+                        if active_excursions and d.position_id in active_excursions:
+                            # Note: We must be careful about shared state like active_excursions
+                            # For now, we assume it's passed as a snapshot or safe to read
+                            mae = active_excursions[d.position_id].get('mae', 0.0)
+                            mfe = active_excursions[d.position_id].get('mfe', 0.0)
+                        
+                        cursor.execute(sql_update, (total_pnl, mae, mfe, d.position_id))
+                        
+                        if cursor.rowcount == 0:
+                            timestamp = datetime.fromtimestamp(d.time).strftime("%Y-%m-%d %H:%M:%S")
+                            side = "SELL" if d.type == 0 else "BUY" 
+                            cursor.execute(sql_insert, (timestamp, d.symbol, 'DEAL_OUT', d.position_id, side, d.price, d.volume, total_pnl, f"Magic:{d.magic} {d.comment}"))                            
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            self.logger.error(f"Error executing sync_deals: {e}")
 
     def get_today_summary(self, symbol=None):
         """Calculates the total realized profit for today."""
@@ -202,12 +216,11 @@ class DBManager:
         return 0.0
 
     def archive_old_data(self, days=90):
-        """Moves old records to a backup database to maintain performance."""
-        time.sleep(random.uniform(0, 3)) # Jitter to avoid bot collision
-        conn = self.get_connection()
-        if not conn:
-            return
-            
+        """Queues an archival task."""
+        self.task_queue.put(("archive", (days,), {}))
+
+    def _execute_archive(self, conn, days):
+        """Internal execution of archive_old_data inside worker."""
         try:
             with closing(conn.cursor()) as cursor:
                 cursor.execute("SELECT date('now', '-' || ? || ' days')", (str(days),))
@@ -239,10 +252,8 @@ class DBManager:
                 try: cursor.execute("DETACH DATABASE backup")
                 except: pass
         except Exception as e:
-            if conn: conn.rollback()
+            conn.rollback()
             self.logger.error(f"[Archive] Error during data archiving: {e}")
-        finally:
-            conn.close()
 
 if __name__ == "__main__":
     db = DBManager()

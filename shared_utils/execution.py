@@ -41,8 +41,10 @@ class TradeExecutor:
             return False
             
         spread = info.spread
-        if spread > config.MAX_ALLOWED_SPREAD:
-            self.logger.warning(f"Spread too high ({spread}), entry rejected. (Limit: {config.MAX_ALLOWED_SPREAD})")
+        # Use getattr to avoid AttributeError if MAX_ALLOWED_SPREAD is missing from a specific config
+        max_spread = getattr(config, 'MAX_ALLOWED_SPREAD', 100)
+        if spread > max_spread:
+            self.logger.warning(f"Spread too high ({spread}), entry rejected. (Limit: {max_spread})")
             return False
         return True
 
@@ -65,7 +67,7 @@ class TradeExecutor:
 
     def send_order(self, symbol, order_type, lot, price, sl=0.0, tp=0.0,
                    atr_value=None, rsi_value=None, grid_level=None, cycle_id=None):
-        """Sends a market order and handles common errors."""
+        """Sends a market order with retry logic and handles common errors."""
         
         # Verify spread before sending order
         if not self.check_spread(symbol):
@@ -78,7 +80,7 @@ class TradeExecutor:
         # Normalize prices
         price = self.normalize_price(price, symbol)
         
-        if config.USE_TRAILING_STOP:
+        if getattr(config, 'USE_TRAILING_STOP', False):
             # If using Trailing Stop, we don't set a hard TP right away
             tp = 0.0
             
@@ -93,28 +95,26 @@ class TradeExecutor:
             "price": price,
             "sl": sl,
             "tp": tp,
-            "deviation": config.MAX_DEVIATION,
-            "magic": config.MAGIC_NUMBER,
+            "deviation": getattr(config, 'MAX_DEVIATION', 10),
+            "magic": getattr(config, 'MAGIC_NUMBER', 0),
             "comment": "Smart Grid Bot",
             "type_time": ag.ORDER_TIME_GTC,
             "type_filling": self.get_filling_mode(symbol),
         }
 
-        # Send the order
+        # Send the order with retry logic
         self.logger.info(f"Sending Order Request: Type={order_type}, Lot={lot}, Price={price}")
+        
         start_time = time.perf_counter()
-        result = ag.order_send(request)
+        result = self._send_order_with_retry(request)
         exec_time_ms = int((time.perf_counter() - start_time) * 1000)
 
-        if result is None:
-            self.logger.error("order_send() returned None. Terminal disconnected or failed.")
-            return None
-
-        # Handle retcodes
+        # Handle retcodes and database logging
         handled_result = self._handle_retcode(result, request)
         if handled_result:
             side = "BUY" if order_type == ag.ORDER_TYPE_BUY else "SELL"
             slippage = 0.0
+            # Note: We use the ORIGINAL target price for slippage calculation
             if order_type == ag.ORDER_TYPE_BUY:
                 slippage = handled_result.price - price
             elif order_type == ag.ORDER_TYPE_SELL:
@@ -140,17 +140,17 @@ class TradeExecutor:
         return handled_result
 
     def modify_sl(self, ticket, symbol, new_sl):
-         """Modifies the stop loss of an existing order."""
+         """Modifies the stop loss of an existing order with retry logic."""
          new_sl = self.normalize_price(new_sl, symbol)
          request = {
              "action": ag.TRADE_ACTION_SLTP,
              "symbol": symbol,
              "position": ticket,
              "sl": new_sl,
-             "magic": config.MAGIC_NUMBER
+             "magic": getattr(config, 'MAGIC_NUMBER', 0)
          }
          
-         result = ag.order_send(request)
+         result = self._send_order_with_retry(request)
          if result and result.retcode == ag.TRADE_RETCODE_DONE:
              self.logger.info(f"Successfully modified SL (Trailing) for position {ticket} to {new_sl}")
              return True
@@ -185,7 +185,7 @@ class TradeExecutor:
 
         for p in positions:
             # Quick filter for Magic Number
-            if p.magic != config.MAGIC_NUMBER: 
+            if p.magic != getattr(config, 'MAGIC_NUMBER', 0): 
                 continue
 
             if p.type == ag.POSITION_TYPE_BUY:
@@ -236,7 +236,7 @@ class TradeExecutor:
             trail_dist = getattr(config, 'TRAILING_STOP_POINTS', 50) * point
 
         for p in positions:
-            if p.magic != config.MAGIC_NUMBER: 
+            if p.magic != getattr(config, 'MAGIC_NUMBER', 0): 
                 continue
 
             if p.type == ag.POSITION_TYPE_BUY:
@@ -258,17 +258,17 @@ class TradeExecutor:
                     self.modify_sl(p.ticket, symbol, new_sl)
 
     def modify_tp(self, ticket, symbol, new_tp):
-         """Modifies the take profit of an existing order."""
+         """Modifies the take profit of an existing order with retry logic."""
          new_tp = self.normalize_price(new_tp, symbol)
          request = {
              "action": ag.TRADE_ACTION_SLTP,
              "symbol": symbol,
              "position": ticket,
              "tp": new_tp,
-             "magic": config.MAGIC_NUMBER
+             "magic": getattr(config, 'MAGIC_NUMBER', 0)
          }
          
-         result = ag.order_send(request)
+         result = self._send_order_with_retry(request)
          if result and result.retcode == ag.TRADE_RETCODE_DONE:
              self.logger.info(f"Successfully modified TP for position {ticket} to {new_tp}")
              return True
@@ -277,7 +277,7 @@ class TradeExecutor:
              return False
 
     def close_position(self, position, tick):
-         """Sends an inverse market order to close a single position."""
+         """Sends an inverse market order to close a single position with retry logic."""
          order_type = ag.ORDER_TYPE_SELL if position.type == 0 else ag.ORDER_TYPE_BUY
          price = tick.bid if order_type == ag.ORDER_TYPE_SELL else tick.ask
          
@@ -288,15 +288,15 @@ class TradeExecutor:
              "type": order_type,
              "position": position.ticket, # Specific ticket to close
              "price": price,
-             "deviation": config.MAX_DEVIATION,
-             "magic": config.MAGIC_NUMBER,
+             "deviation": getattr(config, 'MAX_DEVIATION', 10),
+             "magic": getattr(config, 'MAGIC_NUMBER', 0),
              "comment": "Bot Partial Close",
              "type_time": ag.ORDER_TIME_GTC,
              "type_filling": self.get_filling_mode(position.symbol),
          }
          
          self.logger.info(f"Closing Position {position.ticket}")
-         result = ag.order_send(request)
+         result = self._send_order_with_retry(request)
          
          if result and result.retcode == ag.TRADE_RETCODE_DONE:
              # Calculate final PnL for the alert
@@ -311,14 +311,14 @@ class TradeExecutor:
          If we have too many positions (e.g. >= 5), we find the oldest losing trade
          and the newest profitable trade. If Total Profit of both >= 0 => Close Both to reduce load.
          """
-         if not config.ENABLE_PARTIAL_CLOSE or tick is None:
+         if not getattr(config, 'ENABLE_PARTIAL_CLOSE', False) or tick is None:
               return
 
          buy_pos = [p for p in positions if p.type == 0]
          sell_pos = [p for p in positions if p.type == 1]
 
          for side_positions in (buy_pos, sell_pos):
-              if len(side_positions) >= config.MIN_POSITIONS_FOR_PARTIAL:
+              if len(side_positions) >= getattr(config, 'MIN_POSITIONS_FOR_PARTIAL', 5):
                   # Sort oldest to newest (by time)
                   side_positions.sort(key=lambda x: x.time)
                   
@@ -357,18 +357,97 @@ class TradeExecutor:
                  continue
 
              # Check Ghost TP
+             emoji = "👻"
              if side == 0 and tick.bid >= basket_tp_price:
-                 self.logger.critical(f"👻 GHOST TP TRIGGERED (BUY)! Bid {tick.bid:.5f} >= Target {basket_tp_price:.5f}. Securing profits!")
+                 self.logger.critical(f"{emoji} GHOST TP TRIGGERED (BUY)! Bid {tick.bid:.5f} >= Target {basket_tp_price:.5f}. Securing profits!")
                  for p in side_positions:
                      self.close_position(p, tick)
              elif side == 1 and tick.ask <= basket_tp_price:
-                 self.logger.critical(f"👻 GHOST TP TRIGGERED (SELL)! Ask {tick.ask:.5f} <= Target {basket_tp_price:.5f}. Securing profits!")
+                 self.logger.critical(f"{emoji} GHOST TP TRIGGERED (SELL)! Ask {tick.ask:.5f} <= Target {basket_tp_price:.5f}. Securing profits!")
                  for p in side_positions:
                      self.close_position(p, tick)
+
+    def _send_order_with_retry(self, request):
+        """
+        Internal wrapper for ag.order_send with Exponential Backoff retry logic.
+        Refreshes price dynamically for Requotes.
+        """
+        MAX_RETRIES = 3
+        RETRY_DELAYS = [0.5, 1.0, 2.0]
+        
+        # We try up to MAX_RETRIES times (total attempts = 1 + MAX_RETRIES)
+        for i in range(MAX_RETRIES + 1):
+            result = ag.order_send(request)
+            
+            if result is None:
+                self.logger.error(f"Attempt {i+1}: order_send() returned None (Terminal Issue).")
+                if i < MAX_RETRIES:
+                    time.sleep(RETRY_DELAYS[i])
+                    continue
+                return None
+
+            code = result.retcode
+            
+            # 1. Success Condition
+            if code in [ag.TRADE_RETCODE_DONE, ag.TRADE_RETCODE_PLACED, ag.TRADE_RETCODE_DONE_PARTIAL]:
+                if i > 0:
+                    self.logger.info("✅ Order SUCCESS after retries.")
+                return result
+
+            # 2. Fatal Rejection Condition (BREAK)
+            fatal_codes = [
+                ag.TRADE_RETCODE_NO_MONEY,
+                ag.TRADE_RETCODE_MARKET_CLOSED,
+                ag.TRADE_RETCODE_INVALID,
+                ag.TRADE_RETCODE_INVALID_VOLUME,
+                ag.TRADE_RETCODE_INVALID_STOPS,
+                ag.TRADE_RETCODE_TRADE_DISABLED,
+                10027, # AUTOTRADING_DISABLED
+                10044  # CLOSE_ONLY
+            ]
+            if code in fatal_codes:
+                self.logger.critical(f"❌ FATAL rejection (Code: {code}). Breaking retry loop. Request: {request}")
+                return result
+
+            # 3. Retriable Condition (CONTINUE with Backoff)
+            retriable_codes = [
+                ag.TRADE_RETCODE_TIMEOUT,
+                ag.TRADE_RETCODE_CONNECTION,
+                ag.TRADE_RETCODE_REQUOTE,
+                ag.TRADE_RETCODE_PRICE_CHANGED,
+                ag.TRADE_RETCODE_PRICE_OFF
+            ]
+            
+            if code in retriable_codes:
+                if i < MAX_RETRIES:
+                    delay = RETRY_DELAYS[i]
+                    self.logger.warning(f"⚠️ Transient Error {code} (Attempt {i+1}). Retrying in {delay}s...")
+                    
+                    # DYNAMIC PRICE REFRESH for Requotes
+                    if code in [ag.TRADE_RETCODE_REQUOTE, ag.TRADE_RETCODE_PRICE_CHANGED]:
+                        tick = ag.symbol_info_tick(request['symbol'])
+                        if tick:
+                            new_price = tick.ask if request['type'] == ag.ORDER_TYPE_BUY else tick.bid
+                            new_price = self.normalize_price(new_price, request['symbol'])
+                            self.logger.info(f"🔄 Requote Detected: Refreshing price to {new_price}")
+                            request['price'] = new_price
+                    
+                    time.sleep(delay)
+                    continue
+                else:
+                    self.logger.error(f"❌ Failed after {MAX_RETRIES} retries. Final Code: {code}")
+                    return result
+            
+            # 4. Unknown/Other code (Default fallback)
+            self.logger.error(f"Order failed with code {code}. No retry policy for this code.")
+            return result
 
     def _handle_retcode(self, result, request):
         """Processes MetaTrader 5 return codes with descriptive logging."""
         
+        if result is None:
+             return None
+             
         code = result.retcode
         
         if code == ag.TRADE_RETCODE_DONE:
@@ -397,21 +476,16 @@ class TradeExecutor:
         elif code == ag.TRADE_RETCODE_INVALID_STOPS:
             self.logger.error(f"Invalid stops (SL/TP) error. Given SL:{request.get('sl')} TP:{request.get('tp')}")
         elif code == ag.TRADE_RETCODE_TRADE_DISABLED:
-            self.logger.error(f"❌ CRITICAL: Trading is DISABLED for {request.get('symbol')} on this account/broker. Check if the terminal has trading permissions.")
-            time.sleep(2) # Slow down spam
+            self.logger.error(f"❌ CRITICAL: Trading is DISABLED for {request.get('symbol')} on this account/broker.")
         elif code == 10027: # TRADE_RETCODE_AUTOTRADING_DISABLED
-            self.logger.error("❌ CRITICAL: 'Algo Trading' is DISABLED in MT5. Please click the 'Algo Trading' button in the top toolbar to enable it.")
-            time.sleep(2) # Slow down spam
+            self.logger.error("❌ CRITICAL: 'Algo Trading' is DISABLED in MT5.")
         elif code == ag.TRADE_RETCODE_MARKET_CLOSED:
             # Important for handling weekends
             self.logger.warning("Market is closed.")
-            time.sleep(1) # Slow down spam
         elif code == ag.TRADE_RETCODE_NO_MONEY:
             self.logger.error("❌ CRITICAL: Not enough money to open position.")
-            time.sleep(5) # Severe error, slow down significantly
         elif code == ag.TRADE_RETCODE_PRICE_CHANGED:
             self.logger.warning("Requote: Price changed.")
-            # We could optionally implement retry logic here.
         elif code == ag.TRADE_RETCODE_PRICE_OFF:
             self.logger.warning("Off quotes: No current price available.")
         elif code == ag.TRADE_RETCODE_CONNECTION:
@@ -419,10 +493,8 @@ class TradeExecutor:
         elif code == 10025: # TRADE_RETCODE_NO_CHANGES
              self.logger.debug(f"Modification ignored (Error 10025): TP/SL is already at requested value.")
         elif code == 10044: # TRADE_RETCODE_CLOSE_ONLY
-             self.logger.error(f"Only position closing is allowed for {request.get('symbol')} (Error 10044). Broker restriction.")
-             time.sleep(2)
+             self.logger.error(f"Only position closing is allowed for {request.get('symbol')} (Error 10044).")
         else:
              self.logger.error(f"Trade failed with unknown error code: {code}. Result: {result}")
-             time.sleep(0.5)
         
         return None

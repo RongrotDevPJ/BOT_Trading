@@ -1,5 +1,7 @@
 import os
 import csv
+import queue
+import time
 from datetime import datetime
 import threading
 import MetaTrader5 as mt5
@@ -11,8 +13,6 @@ class CSVLogger:
     def __init__(self, symbol):
         self.symbol = symbol
         from pathlib import Path
-        # Get the root directory of the project (BOT_Trading)
-        # __file__ is BOT_Trading\shared_utils\csv_logger.py
         current_dir = Path(__file__).resolve().parent
         project_root = current_dir.parent
         self.log_dir = project_root / "Log_HistoryOrder" / "Analytics_Data"
@@ -20,6 +20,27 @@ class CSVLogger:
         self.filepath = self.log_dir / f"{self.symbol}_Analytics.csv"
         self.db_manager = DBManager()
         self._init_file()
+        
+        # Async Task Queue & Worker Thread
+        self.task_queue = queue.Queue()
+        self.worker_thread = threading.Thread(target=self._worker, daemon=True)
+        self.worker_thread.start()
+
+    def _worker(self):
+        """Background worker that processes CSV write tasks asynchronously."""
+        while True:
+            try:
+                row = self.task_queue.get()
+                if row is None: break
+                
+                with open(self.filepath, mode='a', newline='', encoding='utf-8') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(row)
+                
+                self.task_queue.task_done()
+            except Exception as e:
+                print(f"CSV Worker failed: {e}")
+                time.sleep(1)
 
     def _init_file(self):
         with self._lock:
@@ -39,7 +60,7 @@ class CSVLogger:
     def log_event(self, action, side="", price=0.0, spread=None, rsi=None, atr=None, ema=None, 
                   grid_level=None, distance_moved=None, required_distance=None, lot_size=None, 
                   drawdown=None, balance=None, equity=None, profit=None, notes="", ticket=None):
-        
+        """Queues a logging event for both CSV and Database."""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         # Auto-fetch internal spread if not provided for specific actions
@@ -66,15 +87,9 @@ class CSVLogger:
                 f"{equity:.2f}" if equity is not None else "",
                 notes
             ]
-            try:
-                with self._lock:
-                    with open(self.filepath, mode='a', newline='', encoding='utf-8') as f:
-                        writer = csv.writer(f)
-                        writer.writerow(row)
-            except Exception as e:
-                print(f"Error logging to CSV: {e}")
+            self.task_queue.put(row)
         
-        # Dual-Logging: SQLite
+        # Dual-Logging: SQLite (Now also non-blocking)
         try:
             self.db_manager.log_trade(
                 action=action,
@@ -85,7 +100,7 @@ class CSVLogger:
                 lots=lot_size if lot_size is not None else 0.0,
                 spread=spread if spread is not None else 0.0,
                 profit=profit if profit is not None else 0.0,
-                comment=f"{notes}"[:100] # Cleaner comment now that we have columns
+                comment=f"{notes}"[:100]
             )
         except Exception as e:
-            print(f"Error logging to DB (via CSVLogger): {e}")
+            print(f"Error queuing log to DB (via CSVLogger): {e}")
