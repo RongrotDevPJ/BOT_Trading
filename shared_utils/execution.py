@@ -300,7 +300,7 @@ class TradeExecutor:
          
          if result and result.retcode == ag.TRADE_RETCODE_DONE:
              # Calculate final PnL for the alert
-             pnl = position.profit + position.commission + position.swap
+             pnl = position.profit + getattr(position, 'commission', 0.0) + position.swap
              icon = "✅" if pnl >= 0 else "❌"
              send_telegram_message(f"{icon} <b>Trade Closed: {position.symbol}</b>\nTicket: {position.ticket}\nSide: {'BUY' if position.type == 0 else 'SELL'}\nProfit: ${pnl:.2f}")
          

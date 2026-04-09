@@ -401,7 +401,7 @@ class SmartGridStrategy:
             return
             
         # Calculate total floating PnL including commission and swap
-        total_pnl = sum(p.profit + p.commission + p.swap for p in positions)
+        total_pnl = sum(p.profit + getattr(p, 'commission', 0.0) + p.swap for p in positions)
         
         # Start trailing if trigger reached
         if total_pnl >= config.BASKET_TRAILING_TRIGGER_USD:

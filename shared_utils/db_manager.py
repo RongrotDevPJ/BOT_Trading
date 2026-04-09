@@ -156,7 +156,7 @@ class DBManager:
                 with closing(conn.cursor()) as cursor:
                     for d in deals:
                         if d.entry == 1: # DEAL_OUT corresponds to closing out a position
-                            total_pnl = d.profit + d.commission + d.swap
+                            total_pnl = d.profit + getattr(d, 'commission', 0.0) + d.swap
                             mae = 0.0
                             mfe = 0.0
                             if active_excursions and d.position_id in active_excursions:

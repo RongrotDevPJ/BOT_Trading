@@ -151,7 +151,7 @@ def main():
                     deals = client.get_history_deals(symbol=config.SYMBOL, magic=config.MAGIC_NUMBER, days=0)
                     # Sync deals to SQLite for accurate persistent history
                     strategy.csv_logger.db_manager.sync_deals(deals, active_excursions=strategy.active_excursions)
-                    symbol_realized_profit = sum(d.profit + d.commission + d.swap for d in deals)
+                    symbol_realized_profit = sum(d.profit + getattr(d, 'commission', 0.0) + d.swap for d in deals)
                     
                     open_pos = client.get_open_positions(symbol=config.SYMBOL, magic=config.MAGIC_NUMBER)
                     symbol_floating_profit = sum(p.profit for p in open_pos)
