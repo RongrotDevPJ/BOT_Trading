@@ -28,8 +28,8 @@ MAX_GAP_MULTIPLIER = 4.0     # Pause if gap > 4x grid distance
 
 # --- Phase 2 Upgrades (Grid Multiplier & Basket Trailing) ---
 GRID_DISTANCE_MULTIPLIER = 1.3
-BASKET_TRAILING_TRIGGER_USD = 10.0
-BASKET_TRAILING_STEP_USD = 3.0
+BASKET_TRAILING_TRIGGER_USD = 30.0
+BASKET_TRAILING_STEP_USD = 15.0
 
 # --- Indicators & Filters Setup ---
 import MetaTrader5 as ag
