@@ -54,13 +54,21 @@ class MT5Client:
             return False
          
          if not terminal_info.connected:
-             self.logger.warning("Terminal is not connected to broker.")
-             return False
-        
-         # Optional: Check if market is open based on symbol (requires more logic)
-         # We'll handle this in the main loop or execution by checking for tick data updates
+             self.logger.warning("Terminal disconnected! Attempting hard re-initialization (Auto-Healing)...")
+             import time
+             self.shutdown() # ปิด Connection ที่ตายแล้วทิ้ง
+             time.sleep(5)   # รอเคลียร์ Socket OS 5 วินาที
+             
+             # พยายามล็อกอินใหม่ด้วยฟังก์ชัน connect() ของคุณ
+             if self.connect():
+                 self.logger.info("✅ Auto-Healing successful. Terminal reconnected seamlessly.")
+                 return True
+             else:
+                 self.logger.error("❌ Failed to auto-reconnect. Will try again in the next loop.")
+                 return False
              
          return True
+
 
     def get_symbol_info(self, symbol):
         """Gets symbol information."""
