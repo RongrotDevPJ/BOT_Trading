@@ -217,10 +217,10 @@ def main():
                 # Fetch tick data globally for all checks to ensure consistency
                 tick = client.get_tick(config.SYMBOL)
                 if tick is None:
-                    if time.time() - last_heartbeat > 10: 
-                        logger.warning(f"Waiting for tick data for {config.SYMBOL}... (Market might be closed or symbol not in Market Watch)")
+                    logger.warning(f"NULL TICK: Waiting for tick data for {config.SYMBOL}... (Market closed or symbol missing)")
                     time.sleep(1)
                     continue
+
 
                 # MAE/MFE Tracker
                 positions = strategy.get_positions()

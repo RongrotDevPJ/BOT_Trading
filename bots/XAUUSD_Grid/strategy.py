@@ -25,6 +25,8 @@ class SmartGridStrategy:
         self.last_initial_entry_time = 0
         self.active_excursions = {}
         self.max_basket_pnl = -1000000.0 # Phase 2: Track max floating PnL for basket trailing
+        self.last_trailing_log_time = 0 # Throttled logging for dynamic trailing params
+
 
     def is_max_drawdown_reached(self, executor, tick):
          """Checks if current account drawdown exceeds the max limit and performs Hedging if enabled."""
@@ -391,32 +393,57 @@ class SmartGridStrategy:
                  new_tp = self.calculate_basket_tp(sell_positions, side=1, use_be=use_be)
                  self._update_tps_if_needed(executor, sell_positions, new_tp)
 
-    def check_basket_trailing(self, executor, tick):
+    def check_basket_trailing(self, executor, tick, current_atr=None):
         """
         Tracks total floating PnL for the symbol and applies a trailing stop to the entire basket.
+        XAUUSD Upgrade: Uses ATR-based dynamic trailing stop.
         """
         positions = self.get_positions()
         if not positions:
             self.max_basket_pnl = -1000000.0
             return
             
+        # Calculate dynamic parameters based on ATR
+        total_volume = sum(p.volume for p in positions)
+        s_info = ag.symbol_info(config.SYMBOL)
+        
+        # Calculate ATR-based levels
+        if current_atr and s_info:
+            # ATR_USD_Value = (ATR_Value / tick_size) * tick_value * total_volume
+            atr_usd = (current_atr / s_info.trade_tick_size) * s_info.trade_tick_value * total_volume
+            trailing_step = atr_usd * 1.5
+            trailing_trigger = max(30.0, atr_usd * 2.0)
+            is_dynamic = True
+            
+            # Throttled logging for visibility (Every 10 minutes or when trigger reached)
+            curr_time = time.time()
+            if curr_time - self.last_trailing_log_time > 600:
+                self.logger.info(f"📊 [Dynamic Trailing Status] ATR(14): {current_atr:.2f} | Vol: {total_volume:.2f} | DynTrigger: ${trailing_trigger:.2f} | DynStep: ${trailing_step:.2f}")
+                self.last_trailing_log_time = curr_time
+        else:
+            trailing_step = config.BASKET_TRAILING_STEP_USD
+            trailing_trigger = config.BASKET_TRAILING_TRIGGER_USD
+            is_dynamic = False
+
         # Calculate total floating PnL including commission and swap
         total_pnl = sum(p.profit + getattr(p, 'commission', 0.0) + p.swap for p in positions)
         
         # Start trailing if trigger reached
-        if total_pnl >= config.BASKET_TRAILING_TRIGGER_USD:
+        if total_pnl >= trailing_trigger:
             if total_pnl > self.max_basket_pnl:
                 self.max_basket_pnl = total_pnl
-                self.logger.info(f"📈 [Basket Trailing] New Max PnL detected: ${self.max_basket_pnl:.2f} (Trigger: ${config.BASKET_TRAILING_TRIGGER_USD:.2f})")
+                dyn_str = "[DYNAMIC] " if is_dynamic else "[STATIC] "
+                self.logger.info(f"📈 {dyn_str}[Basket Trailing] New Max PnL: ${self.max_basket_pnl:.2f} (Trigger: ${trailing_trigger:.2f}, Step: ${trailing_step:.2f})")
                 
         # Check if trailing stop is hit
         if self.max_basket_pnl > -1000000.0:
-            if total_pnl < self.max_basket_pnl - config.BASKET_TRAILING_STEP_USD:
-                self.logger.critical(f"🚀 [Basket Trailing] TRAILING STOP HIT! Current PnL: ${total_pnl:.2f} < Max (${self.max_basket_pnl:.2f}) - Step (${config.BASKET_TRAILING_STEP_USD:.2f}). Executing MARKET CLOSE ALL for {len(positions)} positions.")
+            if total_pnl < self.max_basket_pnl - trailing_step:
+                self.logger.critical(f"🚀 [Basket Trailing] TRAILING STOP HIT! Current PnL: ${total_pnl:.2f} < Max (${self.max_basket_pnl:.2f}) - Step (${trailing_step:.2f}). Executing MARKET CLOSE ALL for {len(positions)} positions.")
                 # Execute Market Close All for these positions
                 for p in positions:
                     executor.close_position(p, tick)
                 self.max_basket_pnl = -1000000.0
+
              
     def _update_tps_if_needed(self, executor, positions, new_tp):
          """Helper to iterate and modify TPs only if they differ significantly."""

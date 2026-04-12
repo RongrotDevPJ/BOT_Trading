@@ -45,30 +45,38 @@ class DBManager:
         # The worker maintains its own persistent connection for efficiency
         conn = self.get_connection()
         while True:
-            try:
-                task = self.task_queue.get()
-                if task is None: break
-                
-                func_name, args, kwargs = task
-                
-                # If connection dropped, try reconnecting
-                if conn is None: conn = self.get_connection()
-                
-                if func_name == "sql_execute":
-                    sql, params = args
-                    with closing(conn.cursor()) as cursor:
-                        cursor.execute(sql, params)
-                    conn.commit()
-                elif func_name == "sync_deals":
-                    self._execute_sync_deals(conn, *args)
-                elif func_name == "archive":
-                    self._execute_archive(conn, *args)
-                
+            task = self.task_queue.get()
+            if task is None:
                 self.task_queue.task_done()
-            except Exception as e:
-                self.logger.error(f"Worker iteration failed: {e}")
-                if conn: conn.rollback()
-                time.sleep(1) # Prevent rapid fire failure spam
+                break
+            
+            try:
+                try:
+                    func_name, args, kwargs = task
+                    
+                    # If connection dropped, try reconnecting
+                    if conn is None: conn = self.get_connection()
+                    
+                    if func_name == "sql_execute":
+                        sql, params = args
+                        with closing(conn.cursor()) as cursor:
+                            cursor.execute(sql, params)
+                        conn.commit()
+                    elif func_name == "sync_deals":
+                        self._execute_sync_deals(conn, *args)
+                    elif func_name == "archive":
+                        self._execute_archive(conn, *args)
+                    elif func_name == "checkpoint":
+                        self._execute_checkpoint(conn)
+
+                    
+                except Exception as e:
+                    self.logger.error(f"Error processing DB task '{task[0]}': {e}", exc_info=True)
+                    if conn: conn.rollback()
+                    time.sleep(1) # Prevent rapid fire failure spam
+            finally:
+                self.task_queue.task_done()
+
         
         if conn: conn.close()
 
@@ -216,8 +224,10 @@ class DBManager:
         return 0.0
 
     def archive_old_data(self, days=90):
-        """Queues an archival task."""
+        """Queues an archival task and a subsequent WAL checkpoint."""
         self.task_queue.put(("archive", (days,), {}))
+        self.checkpoint_wal()
+
 
     def _execute_archive(self, conn, days):
         """Internal execution of archive_old_data inside worker."""
@@ -254,6 +264,23 @@ class DBManager:
         except Exception as e:
             conn.rollback()
             self.logger.error(f"[Archive] Error during data archiving: {e}")
+
+    def checkpoint_wal(self):
+        """Queues a WAL checkpoint task."""
+        self.task_queue.put(("checkpoint", (), {}))
+
+    def _execute_checkpoint(self, conn):
+        """Internal execution of WAL checkpoint inside worker thread."""
+        try:
+            with closing(conn.cursor()) as cursor:
+                cursor.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+                res = cursor.fetchone()
+                if res:
+                    # Result columns: busy, log, checkpointed
+                    self.logger.warning(f"[DB Checkpoint] WAL Checkpointed: busy={res[0]}, log={res[1]}, checkpointed={res[2]}")
+        except Exception as e:
+            self.logger.error(f"[DB Checkpoint] Error during WAL checkpoint: {e}")
+
 
 if __name__ == "__main__":
     db = DBManager()

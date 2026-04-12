@@ -29,18 +29,22 @@ class CSVLogger:
     def _worker(self):
         """Background worker that processes CSV write tasks asynchronously."""
         while True:
-            try:
-                row = self.task_queue.get()
-                if row is None: break
-                
-                with open(self.filepath, mode='a', newline='', encoding='utf-8') as f:
-                    writer = csv.writer(f)
-                    writer.writerow(row)
-                
+            row = self.task_queue.get()
+            if row is None:
                 self.task_queue.task_done()
-            except Exception as e:
-                print(f"CSV Worker failed: {e}")
-                time.sleep(1)
+                break
+            
+            try:
+                try:
+                    with open(self.filepath, mode='a', newline='', encoding='utf-8') as f:
+                        writer = csv.writer(f)
+                        writer.writerow(row)
+                except Exception as e:
+                    print(f"CSV Worker failed to write row: {e}")
+                    time.sleep(1)
+            finally:
+                self.task_queue.task_done()
+
 
     def _init_file(self):
         with self._lock:
