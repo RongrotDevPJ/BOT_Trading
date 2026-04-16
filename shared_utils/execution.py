@@ -66,7 +66,7 @@ class TradeExecutor:
         return True
 
     def send_order(self, symbol, order_type, lot, price, sl=0.0, tp=0.0,
-                   atr_value=None, rsi_value=None, grid_level=None, cycle_id=None):
+                   atr_value=None, rsi_value=None, grid_level=None, cycle_id=None, entry_signals=""):
         """Sends a market order with retry logic and handles common errors."""
         
         # Verify spread before sending order
@@ -135,7 +135,8 @@ class TradeExecutor:
                 grid_level=grid_level,
                 cycle_id=cycle_id if cycle_id is not None else str(handled_result.order),
                 slippage=slippage,
-                exec_time_ms=exec_time_ms
+                exec_time_ms=exec_time_ms,
+                entry_signals=entry_signals
             )
         return handled_result
 
@@ -276,10 +277,14 @@ class TradeExecutor:
              self._handle_retcode(result, request)
              return False
 
-    def close_position(self, position, tick):
-         """Sends an inverse market order to close a single position with retry logic."""
-         order_type = ag.ORDER_TYPE_SELL if position.type == 0 else ag.ORDER_TYPE_BUY
-         price = tick.bid if order_type == ag.ORDER_TYPE_SELL else tick.ask
+    def close_position(self, position, tick, strategy_instance=None):
+        """Sends an inverse market order to close a single position and logs excursion data."""
+        order_type = ag.ORDER_TYPE_SELL if position.type == 0 else ag.ORDER_TYPE_BUY
+        price = tick.bid if order_type == ag.ORDER_TYPE_SELL else tick.ask
+        
+        # Capture excursion state if available
+        mae = getattr(strategy_instance, 'min_basket_pnl', 0.0) if strategy_instance else 0.0
+        mfe = getattr(strategy_instance, 'max_basket_mfe', 0.0) if strategy_instance else 0.0
          
          request = {
              "action": ag.TRADE_ACTION_DEAL,
@@ -296,13 +301,24 @@ class TradeExecutor:
          }
          
          self.logger.info(f"Closing Position {position.ticket}")
+         start_time = time.perf_counter()
          result = self._send_order_with_retry(request)
+         exec_time_ms = int((time.perf_counter() - start_time) * 1000)
          
          if result and result.retcode == ag.TRADE_RETCODE_DONE:
              # Calculate final PnL for the alert
              pnl = position.profit + getattr(position, 'commission', 0.0) + position.swap
              icon = "✅" if pnl >= 0 else "❌"
              send_telegram_message(f"{icon} <b>Trade Closed: {position.symbol}</b>\nTicket: {position.ticket}\nSide: {'BUY' if position.type == 0 else 'SELL'}\nProfit: ${pnl:.2f}")
+             
+             # Log final stats to DB
+             self.db.log_closed_trade_update(
+                 ticket=position.ticket,
+                 close_price=result.price,
+                 profit=pnl,
+                 mae=mae,
+                 mfe=mfe
+             )
          
          return self._handle_retcode(result, request)
 
@@ -352,20 +368,25 @@ class TradeExecutor:
              if not side_positions:
                  continue
 
-             basket_tp_price = strategy_instance.calculate_basket_tp(side_positions, side)
-             if basket_tp_price == 0.0:
-                 continue
+            basket_tp_price = strategy_instance.calculate_basket_tp(side_positions, side)
+            if basket_tp_price == 0.0:
+                continue
 
-             # Check Ghost TP
-             emoji = "👻"
-             if side == 0 and tick.bid >= basket_tp_price:
-                 self.logger.critical(f"{emoji} GHOST TP TRIGGERED (BUY)! Bid {tick.bid:.5f} >= Target {basket_tp_price:.5f}. Securing profits!")
-                 for p in side_positions:
-                     self.close_position(p, tick)
-             elif side == 1 and tick.ask <= basket_tp_price:
-                 self.logger.critical(f"{emoji} GHOST TP TRIGGERED (SELL)! Ask {tick.ask:.5f} <= Target {basket_tp_price:.5f}. Securing profits!")
-                 for p in side_positions:
-                     self.close_position(p, tick)
+            # Calculate dynamic target for logging transparency
+            oldest_pos = min(side_positions, key=lambda p: p.time)
+            divisor = max(0.01, getattr(config, 'DEFAULT_LOT', 0.1))
+            dynamic_target = getattr(config, 'MIN_CYCLE_PROFIT_USC', 15.0) * (oldest_pos.volume / divisor)
+
+            # Check Ghost TP
+            emoji = "👻"
+            if side == 0 and tick.bid >= basket_tp_price:
+                self.logger.critical(f"{emoji} GHOST TP TRIGGERED (BUY)! Target ${dynamic_target:.2f} USC reached. Bid {tick.bid:.5f} >= Target Price {basket_tp_price:.5f}. Securing profits!")
+                for p in side_positions:
+                    self.close_position(p, tick, strategy_instance=strategy_instance)
+            elif side == 1 and tick.ask <= basket_tp_price:
+                self.logger.critical(f"{emoji} GHOST TP TRIGGERED (SELL)! Target ${dynamic_target:.2f} USC reached. Ask {tick.ask:.5f} <= Target Price {basket_tp_price:.5f}. Securing profits!")
+                for p in side_positions:
+                    self.close_position(p, tick, strategy_instance=strategy_instance)
 
     def _send_order_with_retry(self, request):
         """
@@ -377,6 +398,30 @@ class TradeExecutor:
         
         # We try up to MAX_RETRIES times (total attempts = 1 + MAX_RETRIES)
         for i in range(MAX_RETRIES + 1):
+            # Dynamic Spread Check
+            symbol = request['symbol']
+            tick = ag.symbol_info_tick(symbol)
+            info = ag.symbol_info(symbol)
+            
+            if tick and info:
+                current_spread_points = round((tick.ask - tick.bid) / info.point, 1)
+                
+                # Refined threshold logic: Priority to Config, fallback with floor
+                base_limit = getattr(config, 'MAX_DEVIATION', 10) * 3.0
+                max_spread_allowed = getattr(config, 'MAX_ALLOWED_SPREAD', max(base_limit, 50.0))
+                
+                if current_spread_points > max_spread_allowed:
+                    self.logger.warning(
+                        f"⚠️ EXTREME SPREAD! {current_spread_points} pts > "
+                        f"Limit {max_spread_allowed} pts. Attempt {i+1} paused."
+                    )
+                    time.sleep(3) # Market cool down
+                    if i < MAX_RETRIES:
+                        continue
+                    else:
+                        self.logger.error("❌ Spread remained too wide after all retries. Blocking execution.")
+                        return None
+
             result = ag.order_send(request)
             
             if result is None:

@@ -25,6 +25,12 @@ class SmartGridStrategy:
         self.last_initial_entry_time = 0
         self.active_excursions = {}
         self.max_basket_pnl = -1000000.0 # Phase 2: Track max floating PnL for basket trailing
+        self.last_trailing_log_time = 0 # Throttled logging for dynamic trailing params
+        
+        # Phase 3: Enhanced Analytics (Cycle Life MAE/MFE)
+        self.min_basket_pnl = 1000000.0   # MAE (in USC)
+        self.max_basket_mfe = -1000000.0  # MFE (in USC)
+        self.initial_signals = ""         # Stored signals of the first entry
 
     def is_max_drawdown_reached(self, executor, tick):
          """Checks if current account drawdown exceeds the max limit and performs Hedging if enabled."""
@@ -125,10 +131,17 @@ class SmartGridStrategy:
         tick_value = symbol_info.trade_tick_value # Profit of 1 lot per 1 tick move
         point = symbol_info.point
         
-        # Calculate movement needed for MIN_CYCLE_PROFIT_USC
+        # Calculate Dynamic Profit Target based on Initial Lot
+        # 'positions' is already filtered by MAGIC_NUMBER in get_positions()
+        oldest_pos = min(positions, key=lambda p: p.time)
+        initial_lot = oldest_pos.volume
+        divisor = max(0.01, getattr(config, 'DEFAULT_LOT', 0.1))
+        dynamic_target = config.MIN_CYCLE_PROFIT_USC * (initial_lot / divisor)
+
+        # Calculate movement needed for Dynamic Profit Target
         # Profit = (Move / TickSize) * Volume * TickValue
         # Move = (TargetProfit * TickSize) / (Volume * TickValue)
-        required_move = (config.MIN_CYCLE_PROFIT_USC * tick_size) / (total_volume * tick_value)
+        required_move = (dynamic_target * tick_size) / (total_volume * tick_value)
         
         # Standard movement from config
         standard_move = config.BASKET_TP_POINTS * point
@@ -195,7 +208,18 @@ class SmartGridStrategy:
                 self.last_initial_log_time = current_time
             
             initial_lot = self.get_dynamic_lot(0, equity)
-            result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, initial_lot, tick.ask, atr_value=current_atr, rsi_value=current_rsi, grid_level=1, cycle_id=None)
+            
+            # Capture Initial Entry Signals for Analytics
+            self.initial_signals = f"RSI:{current_rsi:.2f} | ATR:{current_atr:.5f} | EMA:{current_ema:.5f}"
+            if enable_stoch and current_stoch:
+                self.initial_signals += f" | Stoch:{current_stoch[0]:.2f}"
+
+            result = executor.send_order(
+                config.SYMBOL, ag.ORDER_TYPE_BUY, initial_lot, tick.ask, 
+                atr_value=current_atr, rsi_value=current_rsi, 
+                grid_level=1, cycle_id=None,
+                entry_signals=self.initial_signals
+            )
             if result:
                 self.last_initial_entry_time = time.time()
                 self.csv_logger.log_event(action="Initial Entry", side="BUY", price=tick.ask, rsi=current_rsi, ema=current_ema, lot_size=initial_lot, ticket=result.order, notes=stoch_str)
@@ -207,8 +231,19 @@ class SmartGridStrategy:
                 self.logger.info(f"✨ [Analysis] Initial SELL Entry Triggered: RSI={current_rsi:.2f} >= {config.RSI_SELL_LEVEL} {stoch_str} {trend_str}")
                 self.last_initial_log_time = current_time
             
-            initial_lot = self.get_dynamic_lot(0, equity)
-            result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, initial_lot, tick.bid, atr_value=current_atr, rsi_value=current_rsi, grid_level=1, cycle_id=None)
+            initial_lot = self.get_dynamic_lot(1, equity)
+            
+            # Capture Initial Entry Signals for Analytics
+            self.initial_signals = f"RSI:{current_rsi:.2f} | ATR:{current_atr:.5f} | EMA:{current_ema:.5f}"
+            if enable_stoch and current_stoch:
+                self.initial_signals += f" | Stoch:{current_stoch[0]:.2f}"
+
+            result = executor.send_order(
+                config.SYMBOL, ag.ORDER_TYPE_SELL, initial_lot, tick.bid, 
+                atr_value=current_atr, rsi_value=current_rsi, 
+                grid_level=1, cycle_id=None,
+                entry_signals=self.initial_signals
+            )
             if result:
                 self.last_initial_entry_time = time.time()
                 self.csv_logger.log_event(action="Initial Entry", side="SELL", price=tick.bid, rsi=current_rsi, ema=current_ema, lot_size=initial_lot, ticket=result.order, notes=stoch_str)
@@ -391,32 +426,66 @@ class SmartGridStrategy:
                  new_tp = self.calculate_basket_tp(sell_positions, side=1, use_be=use_be)
                  self._update_tps_if_needed(executor, sell_positions, new_tp)
 
-    def check_basket_trailing(self, executor, tick):
+    def check_basket_trailing(self, executor, tick, current_atr=None):
         """
-        Tracks total floating PnL for the symbol and applies a trailing stop to the entire basket.
+        Tracks total floating PnL and applies a trailing stop.
+        Also tracks Cycle-Life MAE and MFE for Analytics.
         """
         positions = self.get_positions()
         if not positions:
-            self.max_basket_pnl = -1000000.0
+            self.max_basket_pnl = -1000000.0 # Reset trailing trigger
+            self.min_basket_pnl = 1000000.0  # Reset MAE
+            self.max_basket_mfe = -1000000.0 # Reset MFE
             return
-            
-        # Calculate total floating PnL including commission and swap
+
+        # 1. Calculate Dynamic Profit Target (Trigger)
+        oldest_pos = min(positions, key=lambda p: p.time)
+        initial_lot = oldest_pos.volume
+        divisor = max(0.01, getattr(config, 'DEFAULT_LOT', 0.1))
+        dynamic_target = config.MIN_CYCLE_PROFIT_USC * (initial_lot / divisor)
+        
+        # 2. Calculate Trailing Step based on ATR
+        total_volume = sum(p.volume for p in positions)
+        s_info = ag.symbol_info(config.SYMBOL)
+        
+        if current_atr and s_info:
+            # ATR_USD_Value = (ATR_Value / tick_size) * tick_value * total_volume
+            atr_usd = (current_atr / s_info.trade_tick_size) * s_info.trade_tick_value * total_volume
+            trailing_step = atr_usd * getattr(config, 'ATR_MULTIPLIER', 1.5)
+            is_dynamic = True
+        else:
+            trailing_step = getattr(config, 'BASKET_TRAILING_STEP_USD', 5.0)
+            is_dynamic = False
+
+        # 3. Calculate current PnL (including commission/swap)
         total_pnl = sum(p.profit + getattr(p, 'commission', 0.0) + p.swap for p in positions)
         
-        # Start trailing if trigger reached
-        if total_pnl >= config.BASKET_TRAILING_TRIGGER_USD:
+        # 3.1 Update Cycle-Life MAE/MFE
+        self.max_basket_mfe = max(self.max_basket_mfe, total_pnl)
+        self.min_basket_pnl = min(self.min_basket_pnl, total_pnl)
+        
+        # 4. Activate/Update Trailing
+        if total_pnl >= dynamic_target:
             if total_pnl > self.max_basket_pnl:
-                self.max_basket_pnl = total_pnl
-                self.logger.info(f"📈 [Basket Trailing] New Max PnL detected: ${self.max_basket_pnl:.2f} (Trigger: ${config.BASKET_TRAILING_TRIGGER_USD:.2f})")
+                if self.max_basket_pnl == -1000000.0:
+                    self.logger.info(f"🚀 Basket Trailing ACTIVATED for {config.SYMBOL} - Target: {dynamic_target:.2f} USC")
                 
-        # Check if trailing stop is hit
+                self.max_basket_pnl = total_pnl
+                
+                curr_time = time.time()
+                if curr_time - self.last_trailing_log_time > 60: # Log every minute if moving
+                    dyn_str = "[DYNAMIC]" if is_dynamic else "[STATIC]"
+                    exit_pnl = self.max_basket_pnl - trailing_step
+                    self.logger.info(f"👻 {config.SYMBOL} Trailing Updated: Max PnL: {self.max_basket_pnl:.2f} USC | Current PnL: {total_pnl:.2f} USC | Exit Point: {exit_pnl:.2f} USC")
+                    self.last_trailing_log_time = curr_time
+                    
+        # 5. Check if trailing stop is hit
         if self.max_basket_pnl > -1000000.0:
-            if total_pnl < self.max_basket_pnl - config.BASKET_TRAILING_STEP_USD:
-                self.logger.critical(f"🚀 [Basket Trailing] TRAILING STOP HIT! Current PnL: ${total_pnl:.2f} < Max (${self.max_basket_pnl:.2f}) - Step (${config.BASKET_TRAILING_STEP_USD:.2f}). Executing MARKET CLOSE ALL for {len(positions)} positions.")
-                # Execute Market Close All for these positions
+            if total_pnl < self.max_basket_pnl - trailing_step:
+                self.logger.critical(f"🚀 [Basket Trailing] TRAILING STOP HIT! Current PnL: ${total_pnl:.2f} < Max (${self.max_basket_pnl:.2f}) - Step (${trailing_step:.2f}). Closing all {len(positions)} positions.")
                 for p in positions:
                     executor.close_position(p, tick)
-                self.max_basket_pnl = -1000000.0
+                self.max_basket_pnl = -1000000.0 # Reset after hitting
              
     def _update_tps_if_needed(self, executor, positions, new_tp):
          """Helper to iterate and modify TPs only if they differ significantly."""

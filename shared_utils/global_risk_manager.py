@@ -2,6 +2,8 @@ import MetaTrader5 as mt5
 from datetime import datetime
 import logging
 import os
+import time
+import threading
 from pathlib import Path
 
 logger = logging.getLogger("GlobalRiskManager")
@@ -10,40 +12,80 @@ logger = logging.getLogger("GlobalRiskManager")
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 STOP_FLAG_PATH = PROJECT_ROOT / "GLOBAL_STOP.lock"
 
+class GlobalRiskState:
+    """
+    Class-level state management for Global Risk to implement TTL caching 
+    and thread-safe MT5 API access.
+    """
+    _lock = threading.Lock()
+    _last_check_time = 0
+    _cached_result = False
+    _ttl = 5.0 # Seconds
+
+    @classmethod
+    def get_drawdown_status(cls, max_dd_percent):
+        """Thread-safe TTL check for global drawdown."""
+        current_time = time.time()
+        
+        with cls._lock:
+            # Check if cache is still valid
+            if current_time - cls._last_check_time < cls._ttl:
+                return cls._cached_result
+
+            # Perform the expensive MT5 API call
+            account = mt5.account_info()
+            if account is None:
+                logger.error("Failed to retrieve account info for Global Risk check.")
+                # Return previous status but don't update timestamp to allow retry
+                return cls._cached_result
+
+            balance = account.balance
+            equity = account.equity
+            
+            is_limit_hit = False
+            if balance > 0:
+                drawdown_percent = ((balance - equity) / balance) * 100
+                if drawdown_percent > max_dd_percent:
+                    logger.critical(f"🚨 GLOBAL KILL SWITCH TRIGGERED! Account DD={drawdown_percent:.2f}% (Limit={max_dd_percent}%)")
+                    # Trigger the actual closure logic
+                    trigger_emergency_close(
+                        reason=f"Account DD hit {drawdown_percent:.2f}%", 
+                        trigger_bot="GlobalRiskManager"
+                    )
+                    is_limit_hit = True
+            
+            # Update cache
+            cls._cached_result = is_limit_hit
+            cls._last_check_time = current_time
+            return is_limit_hit
+
 def check_global_drawdown(max_dd_percent=15.0):
     """
     Checks the overall account drawdown.
-    If it exceeds the limit, triggers an emergency close of all positions.
-    Returns True if a Kill Switch was triggered or is active.
+    Uses a 5-second TTL cache to reduce MT5 API overhead.
     """
-    # Check if a shutdown is already in progress or active
-    if STOP_FLAG_PATH.exists():
+    # 1. Check for the physical lock file (Always the priority, non-cached)
+    if is_trading_suspended():
         return True
 
-    account = mt5.account_info()
-    if account is None:
-        logger.error("Failed to retrieve account info for Global Risk check.")
-        return False
-
-    balance = account.balance
-    equity = account.equity
-
-    if balance > 0:
-        drawdown_percent = ((balance - equity) / balance) * 100
-        if drawdown_percent > max_dd_percent:
-            logger.critical(f"🚨 GLOBAL KILL SWITCH TRIGGERED! Account DD={drawdown_percent:.2f}% (Limit={max_dd_percent}%)")
-            trigger_emergency_close()
-            return True
-
-    return False
+    # 2. Check the cached drawdown status
+    return GlobalRiskState.get_drawdown_status(max_dd_percent)
 
 def trigger_emergency_close(reason="Unknown", trigger_bot="Unknown"):
     """Closes every single open position on the account and creates a lock file."""
+    # Ensure double-checking the suspended state before action
+    if is_trading_suspended():
+        # Just update the existing file or return
+        pass
+
     # Create the lock file immediately to stop other bots from opening new trades
-    with open(STOP_FLAG_PATH, "w") as f:
-        f.write(f"Global Kill Switch activated at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(f"Triggered by: {trigger_bot}\n")
-        f.write(f"Reason: {reason}\n")
+    try:
+        with open(STOP_FLAG_PATH, "w") as f:
+            f.write(f"Global Kill Switch activated at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Triggered by: {trigger_bot}\n")
+            f.write(f"Reason: {reason}\n")
+    except Exception as e:
+        logger.error(f"Failed to create stop flag: {e}")
 
     positions = mt5.positions_get()
     if positions:

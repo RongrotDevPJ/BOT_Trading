@@ -77,6 +77,13 @@ def main():
     cached_target_amount = 0
     cached_drawdown_pct = 0
     cached_acc_drawdown_pct = 0
+    
+    # Indicator Cache
+    last_indicator_update = 0
+    current_rsi = None
+    current_atr = None
+    current_ema = None
+    current_stoch = None
 
     try:
         while True:
@@ -283,20 +290,21 @@ def main():
                         # If target reached but positions still open, we skip INITIAL entry but allow grid logic
                         pass
 
-                # Fetch Indicators
-                current_rsi = indicator_client.get_rsi(config.SYMBOL, config.TIMEFRAME, config.RSI_PERIOD)
-                current_atr = indicator_client.get_atr(config.SYMBOL, config.TIMEFRAME, config.ATR_PERIOD)
-                current_ema = indicator_client.get_ema(config.SYMBOL, config.EMA_TIMEFRAME, config.EMA_PERIOD)
-                
-                current_stoch = None
-                if getattr(config, 'ENABLE_STOCH_FILTER', False):
-                    current_stoch = indicator_client.get_stochastic(
-                        config.SYMBOL, 
-                        config.TIMEFRAME, 
-                        getattr(config, 'STOCH_K', 5), 
-                        getattr(config, 'STOCH_D', 3), 
-                        getattr(config, 'STOCH_SLOWING', 3)
-                    )
+                # Fetch Indicators (Cached every 60s to save CPU/MT5 resources)
+                if current_time - last_indicator_update >= 60:
+                    current_rsi = indicator_client.get_rsi(config.SYMBOL, config.TIMEFRAME, config.RSI_PERIOD)
+                    current_atr = indicator_client.get_atr(config.SYMBOL, config.TIMEFRAME, config.ATR_PERIOD)
+                    current_ema = indicator_client.get_ema(config.SYMBOL, config.EMA_TIMEFRAME, config.EMA_PERIOD)
+                    
+                    if getattr(config, 'ENABLE_STOCH_FILTER', False):
+                        current_stoch = indicator_client.get_stochastic(
+                            config.SYMBOL, 
+                            config.TIMEFRAME, 
+                            getattr(config, 'STOCH_K', 5), 
+                            getattr(config, 'STOCH_D', 3), 
+                            getattr(config, 'STOCH_SLOWING', 3)
+                        )
+                    last_indicator_update = current_time
                 
                 # --- Periodic Snapshot Log (Every 15 mins) ---
                 if current_time - last_snapshot_log > 900:
@@ -341,7 +349,7 @@ def main():
                     strategy.is_max_drawdown_reached(executor, tick)
                 
                 # Manage positions (Phase 2 & 3)
-                strategy.check_basket_trailing(executor, tick)
+                strategy.check_basket_trailing(executor, tick, current_atr=current_atr)
                 executor.ghost_close_check(positions, tick, strategy)
                 executor.manage_partial_close(positions, tick)
                 # Apply Break-Even and Trailing Stop

@@ -1,22 +1,65 @@
-# Python
+# --- Python ---
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Logs
-*.log
+# --- Virtual Environments ---
+venv/
+.venv/
+env/
+ENV/
 
-# VS Code
+# --- Environment Variables (CRITICAL: Do not commit secrets) ---
+.env
+.env.secret
+.env.dev
+.env.prod
+
+# --- IDEs & Editors ---
 .vscode/
 .history/
+.idea/
+*.swp
+*.swo
+.project
+.pydevproject
+.settings/
 
-# Virtual Environment
-venv/
-env/
-.env
-
-# MacOS
+# --- Operating System ---
 .DS_Store
+Thumbs.db
 
-# Trading Data and Logs
+# --- Logs & Databases ---
+*.log
+*.db
+*.sqlite3
 Log_HistoryOrder/
+
+# --- AI & Context Files (Project Specific) ---
+ALL_CONTEXT_FOR_GEMINI.txt
+/knowledge/
+/scratch/
+walkthrough.md
+implementation_plan.md
+task.md
+
+# --- Excel/CSV Backups (Generated) ---
+*.csv
+! .env.example

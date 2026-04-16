@@ -100,8 +100,11 @@ class DBManager:
             status TEXT,
             mae REAL,
             mfe REAL,
+            mae_usc REAL,
+            mfe_usc REAL,
             atr_value REAL,
             rsi_value REAL,
+            entry_signals TEXT,
             grid_level INTEGER,
             cycle_id TEXT,
             slippage REAL,
@@ -115,10 +118,10 @@ class DBManager:
                     cursor.execute(sql_create_trades_table)
                     cursor.execute("PRAGMA table_info(trades)")
                     columns = [row[1] for row in cursor.fetchall()]
-                    new_cols = ['spread', 'status', 'mae', 'mfe', 'atr_value', 'rsi_value', 'grid_level', 'cycle_id', 'slippage', 'exec_time_ms']
+                    new_cols = ['spread', 'status', 'mae', 'mfe', 'mae_usc', 'mfe_usc', 'atr_value', 'rsi_value', 'entry_signals', 'grid_level', 'cycle_id', 'slippage', 'exec_time_ms']
                     for col in new_cols:
                         if col not in columns:
-                            if col in ['status', 'cycle_id']:
+                            if col in ['status', 'cycle_id', 'entry_signals']:
                                 cursor.execute(f"ALTER TABLE trades ADD COLUMN {col} TEXT")
                             elif col in ['grid_level', 'exec_time_ms']:
                                 cursor.execute(f"ALTER TABLE trades ADD COLUMN {col} INTEGER")
@@ -142,23 +145,23 @@ class DBManager:
         """
         self.task_queue.put(("sql_execute", (sql, (timestamp, symbol, action, ticket, side, price, lots, sl, tp, spread, profit, comment)), {}))
 
-    def log_open_trade(self, ticket, symbol, side, open_price, volume, atr, rsi, grid_level, cycle_id, slippage, exec_time_ms, comment=""):
+    def log_open_trade(self, ticket, symbol, side, open_price, volume, atr, rsi, grid_level, cycle_id, slippage, exec_time_ms, entry_signals="", comment=""):
         """Queues an open trade record into the database."""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         sql = """
-        INSERT OR REPLACE INTO trades (timestamp, symbol, action, ticket, side, price, lots, atr_value, rsi_value, grid_level, cycle_id, slippage, exec_time_ms, status, comment)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)
+        INSERT OR REPLACE INTO trades (timestamp, symbol, action, ticket, side, price, lots, atr_value, rsi_value, entry_signals, grid_level, cycle_id, slippage, exec_time_ms, status, comment)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)
         """
-        self.task_queue.put(("sql_execute", (sql, (timestamp, symbol, 'ENTRY', ticket, side, open_price, volume, atr, rsi, grid_level, cycle_id, slippage, exec_time_ms, comment)), {}))
+        self.task_queue.put(("sql_execute", (sql, (timestamp, symbol, 'ENTRY', ticket, side, open_price, volume, atr, rsi, entry_signals, grid_level, cycle_id, slippage, exec_time_ms, comment)), {}))
 
-    def log_closed_trade_update(self, ticket, close_price, profit, mfe, mae):
-        """Queues a closed trade update into the database."""
+    def log_closed_trade_update(self, ticket, close_price, profit, mfe=0.0, mae=0.0):
+        """Queues a closed trade update into the database (Supports both USC and raw REAL)."""
         sql = """
         UPDATE trades 
-        SET status = 'CLOSED', profit = ?, mae = ?, mfe = ?, action = 'DEAL_OUT'
+        SET status = 'CLOSED', profit = ?, mae_usc = ?, mfe_usc = ?, mae = ?, mfe = ?, action = 'DEAL_OUT'
         WHERE ticket = ?
         """
-        self.task_queue.put(("sql_execute", (sql, (profit, mae, mfe, ticket)), {}))
+        self.task_queue.put(("sql_execute", (sql, (profit, mae, mfe, mae, mfe, ticket)), {}))
 
     def sync_deals(self, deals, active_excursions=None):
         """Queues a batch sync of deals."""
