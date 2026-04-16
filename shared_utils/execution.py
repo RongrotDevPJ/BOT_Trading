@@ -285,42 +285,42 @@ class TradeExecutor:
         # Capture excursion state if available
         mae = getattr(strategy_instance, 'min_basket_pnl', 0.0) if strategy_instance else 0.0
         mfe = getattr(strategy_instance, 'max_basket_mfe', 0.0) if strategy_instance else 0.0
-         
-         request = {
-             "action": ag.TRADE_ACTION_DEAL,
-             "symbol": position.symbol,
-             "volume": position.volume,
-             "type": order_type,
-             "position": position.ticket, # Specific ticket to close
-             "price": price,
-             "deviation": getattr(config, 'MAX_DEVIATION', 10),
-             "magic": getattr(config, 'MAGIC_NUMBER', 0),
-             "comment": "Bot Partial Close",
-             "type_time": ag.ORDER_TIME_GTC,
-             "type_filling": self.get_filling_mode(position.symbol),
-         }
-         
-         self.logger.info(f"Closing Position {position.ticket}")
-         start_time = time.perf_counter()
-         result = self._send_order_with_retry(request)
-         exec_time_ms = int((time.perf_counter() - start_time) * 1000)
-         
-         if result and result.retcode == ag.TRADE_RETCODE_DONE:
-             # Calculate final PnL for the alert
-             pnl = position.profit + getattr(position, 'commission', 0.0) + position.swap
-             icon = "✅" if pnl >= 0 else "❌"
-             send_telegram_message(f"{icon} <b>Trade Closed: {position.symbol}</b>\nTicket: {position.ticket}\nSide: {'BUY' if position.type == 0 else 'SELL'}\nProfit: ${pnl:.2f}")
-             
-             # Log final stats to DB
-             self.db.log_closed_trade_update(
-                 ticket=position.ticket,
-                 close_price=result.price,
-                 profit=pnl,
-                 mae=mae,
-                 mfe=mfe
-             )
-         
-         return self._handle_retcode(result, request)
+        
+        request = {
+            "action": ag.TRADE_ACTION_DEAL,
+            "symbol": position.symbol,
+            "volume": position.volume,
+            "type": order_type,
+            "position": position.ticket, # Specific ticket to close
+            "price": price,
+            "deviation": getattr(config, 'MAX_DEVIATION', 10),
+            "magic": getattr(config, 'MAGIC_NUMBER', 0),
+            "comment": "Bot Partial Close",
+            "type_time": ag.ORDER_TIME_GTC,
+            "type_filling": self.get_filling_mode(position.symbol),
+        }
+        
+        self.logger.info(f"Closing Position {position.ticket}")
+        start_time = time.perf_counter()
+        result = self._send_order_with_retry(request)
+        exec_time_ms = int((time.perf_counter() - start_time) * 1000)
+        
+        if result and result.retcode == ag.TRADE_RETCODE_DONE:
+            # Calculate final PnL for the alert
+            pnl = position.profit + getattr(position, 'commission', 0.0) + position.swap
+            icon = "✅" if pnl >= 0 else "❌"
+            send_telegram_message(f"{icon} <b>Trade Closed: {position.symbol}</b>\nTicket: {position.ticket}\nSide: {'BUY' if position.type == 0 else 'SELL'}\nProfit: ${pnl:.2f}")
+            
+            # Log final stats to DB
+            self.db.log_closed_trade_update(
+                ticket=position.ticket,
+                close_price=result.price,
+                profit=pnl,
+                mae=mae,
+                mfe=mfe
+            )
+        
+        return self._handle_retcode(result, request)
 
     def manage_partial_close(self, positions, tick):
          """
