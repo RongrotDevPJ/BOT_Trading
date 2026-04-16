@@ -141,23 +141,23 @@ class TradeExecutor:
         return handled_result
 
     def modify_sl(self, ticket, symbol, new_sl):
-         """Modifies the stop loss of an existing order with retry logic."""
-         new_sl = self.normalize_price(new_sl, symbol)
-         request = {
-             "action": ag.TRADE_ACTION_SLTP,
-             "symbol": symbol,
-             "position": ticket,
-             "sl": new_sl,
-             "magic": getattr(config, 'MAGIC_NUMBER', 0)
-         }
-         
-         result = self._send_order_with_retry(request)
-         if result and result.retcode == ag.TRADE_RETCODE_DONE:
-             self.logger.info(f"Successfully modified SL (Trailing) for position {ticket} to {new_sl}")
-             return True
-         else:
-             self._handle_retcode(result, request)
-             return False
+        """Modifies the stop loss of an existing order with retry logic."""
+        new_sl = self.normalize_price(new_sl, symbol)
+        request = {
+            "action": ag.TRADE_ACTION_SLTP,
+            "symbol": symbol,
+            "position": ticket,
+            "sl": new_sl,
+            "magic": getattr(config, 'MAGIC_NUMBER', 0)
+        }
+        
+        result = self._send_order_with_retry(request)
+        if result and result.retcode == ag.TRADE_RETCODE_DONE:
+            self.logger.info(f"Successfully modified SL (Trailing) for position {ticket} to {new_sl}")
+            return True
+        else:
+            self._handle_retcode(result, request)
+            return False
 
     def manage_trailing_stop(self, positions, tick):
         """
@@ -259,23 +259,23 @@ class TradeExecutor:
                     self.modify_sl(p.ticket, symbol, new_sl)
 
     def modify_tp(self, ticket, symbol, new_tp):
-         """Modifies the take profit of an existing order with retry logic."""
-         new_tp = self.normalize_price(new_tp, symbol)
-         request = {
-             "action": ag.TRADE_ACTION_SLTP,
-             "symbol": symbol,
-             "position": ticket,
-             "tp": new_tp,
-             "magic": getattr(config, 'MAGIC_NUMBER', 0)
-         }
-         
-         result = self._send_order_with_retry(request)
-         if result and result.retcode == ag.TRADE_RETCODE_DONE:
-             self.logger.info(f"Successfully modified TP for position {ticket} to {new_tp}")
-             return True
-         else:
-             self._handle_retcode(result, request)
-             return False
+        """Modifies the take profit of an existing order with retry logic."""
+        new_tp = self.normalize_price(new_tp, symbol)
+        request = {
+            "action": ag.TRADE_ACTION_SLTP,
+            "symbol": symbol,
+            "position": ticket,
+            "tp": new_tp,
+            "magic": getattr(config, 'MAGIC_NUMBER', 0)
+        }
+        
+        result = self._send_order_with_retry(request)
+        if result and result.retcode == ag.TRADE_RETCODE_DONE:
+            self.logger.info(f"Successfully modified TP for position {ticket} to {new_tp}")
+            return True
+        else:
+            self._handle_retcode(result, request)
+            return False
 
     def close_position(self, position, tick, strategy_instance=None):
         """Sends an inverse market order to close a single position and logs excursion data."""
@@ -323,50 +323,50 @@ class TradeExecutor:
         return self._handle_retcode(result, request)
 
     def manage_partial_close(self, positions, tick):
-         """
-         If we have too many positions (e.g. >= 5), we find the oldest losing trade
-         and the newest profitable trade. If Total Profit of both >= 0 => Close Both to reduce load.
-         """
-         if not getattr(config, 'ENABLE_PARTIAL_CLOSE', False) or tick is None:
-              return
+        """
+        If we have too many positions (e.g. >= 5), we find the oldest losing trade
+        and the newest profitable trade. If Total Profit of both >= 0 => Close Both to reduce load.
+        """
+        if not getattr(config, 'ENABLE_PARTIAL_CLOSE', False) or tick is None:
+            return
 
-         buy_pos = [p for p in positions if p.type == 0]
-         sell_pos = [p for p in positions if p.type == 1]
+        buy_pos = [p for p in positions if p.type == 0]
+        sell_pos = [p for p in positions if p.type == 1]
 
-         for side_positions in (buy_pos, sell_pos):
-              if len(side_positions) >= getattr(config, 'MIN_POSITIONS_FOR_PARTIAL', 5):
-                  # Sort oldest to newest (by time)
-                  side_positions.sort(key=lambda x: x.time)
-                  
-                  oldest = side_positions[0] # Usually the one with Max DD
-                  newest = side_positions[-1] # Usually the fastest to flip to profit
-                  
-                  # Compare total floating profit of the TWO
-                  total_profit_cents = oldest.profit + newest.profit
-                  
-                  # If positive (or 0), close the pair to reduce margin load safely
-                  if total_profit_cents >= 0:
-                       self.logger.warning(f"PARTIAL CLOSE TRIGGERED! Closing Ticket {oldest.ticket} and {newest.ticket}. Combined PnL={total_profit_cents}")
-                       self.close_position(newest, tick) # Close profitable first
-                       self.close_position(oldest, tick) # Then close the loser
-                       
-                       # We stop checking to avoid modifying lists while closing
-                       return
+        for side_positions in (buy_pos, sell_pos):
+            if len(side_positions) >= getattr(config, 'MIN_POSITIONS_FOR_PARTIAL', 5):
+                # Sort oldest to newest (by time)
+                side_positions.sort(key=lambda x: x.time)
+                
+                oldest = side_positions[0] # Usually the one with Max DD
+                newest = side_positions[-1] # Usually the fastest to flip to profit
+                
+                # Compare total floating profit of the TWO
+                total_profit_cents = oldest.profit + newest.profit
+                
+                # If positive (or 0), close the pair to reduce margin load safely
+                if total_profit_cents >= 0:
+                    self.logger.warning(f"PARTIAL CLOSE TRIGGERED! Closing Ticket {oldest.ticket} and {newest.ticket}. Combined PnL={total_profit_cents}")
+                    self.close_position(newest, tick, strategy_instance=None) # Close profitable first
+                    self.close_position(oldest, tick, strategy_instance=None) # Then close the loser
+                    
+                    # We stop checking to avoid modifying lists while closing
+                    return
 
     def ghost_close_check(self, positions, tick, strategy_instance):
-         """
-         Ghost Take Profit: Real-time monitoring of floating profit vs Basket TP.
-         Closes positions instantly if price crosses the TP to avoid slippage.
-         """
-         if not positions or tick is None:
-             return
+        """
+        Ghost Take Profit: Real-time monitoring of floating profit vs Basket TP.
+        Closes positions instantly if price crosses the TP to avoid slippage.
+        """
+        if not positions or tick is None:
+            return
 
-         buy_pos = [p for p in positions if p.type == 0]
-         sell_pos = [p for p in positions if p.type == 1]
+        buy_pos = [p for p in positions if p.type == 0]
+        sell_pos = [p for p in positions if p.type == 1]
 
-         for side_positions, side in [(buy_pos, 0), (sell_pos, 1)]:
-             if not side_positions:
-                 continue
+        for side_positions, side in [(buy_pos, 0), (sell_pos, 1)]:
+            if not side_positions:
+                continue
 
             basket_tp_price = strategy_instance.calculate_basket_tp(side_positions, side)
             if basket_tp_price == 0.0:
