@@ -43,6 +43,20 @@ ENABLE_TREND_FILTER = True
 EMA_PERIOD = 200
 EMA_TIMEFRAME = ag.TIMEFRAME_M15
 
+# --- Phase 5: Order Flow / Tick Imbalance Filter ---
+# Score range: -1.0 (all selling) to +1.0 (all buying)
+# BUY  is blocked when imbalance < -TICK_IMBALANCE_THRESHOLD  (falling knife)
+# SELL is blocked when imbalance >  TICK_IMBALANCE_THRESHOLD  (buying surge)
+TICK_IMBALANCE_THRESHOLD = 0.3   # 0.0 = disabled effectively; 0.3 = institutional default
+TICK_IMBALANCE_LOOKBACK_SEC = 60  # Rolling window of ticks to evaluate
+
+# --- Phase 5: Fractional Kelly Criterion Position Sizing ---
+# Kelly % = W - ((1 - W) / R)  where W = Win Rate, R = Risk/Reward Ratio
+# Final lot = (equity * Kelly% * KELLY_FRACTION) / (BASE_EQUITY / BASE_LOT)
+KELLY_FRACTION  = 0.25   # Safety multiplier ("quarter Kelly"); range 0.1–0.5
+KELLY_MIN_TRADES = 10    # Min closed trades required; below this, fallback to DEFAULT_LOT
+KELLY_MAX_FRACTION = 0.20  # Hard cap: never risk more than 20% of equity on Kelly signal
+
 # --- Exit Strategy ---
 BASKET_TP_POINTS = 50        # Strategy TP profit goal in points
 USE_TRAILING_STOP = True     # Use Break-Even and Trailing Stop
@@ -56,6 +70,7 @@ MIN_POSITIONS_FOR_PARTIAL = 5
 MAX_DD_PERCENT = 30.0        # Max drawdown before safety actions
 ENABLE_HEDGE_ON_DD = True    # Auto-hedge if DD reached
 COOLDOWN_MINUTES = 15        # Minimum time between grid orders
+MAX_CONSECUTIVE_LOSSES = 3   # Circuit breaker: pause 1h after N losing cycles
 HEARTBEAT_INTERVAL_SEC = 300 # Log bot status every 5 mins
 ENABLE_DAILY_TARGET = False  # Set to True to enable daily profit target
 DAILY_TARGET_PERCENT = 15.0  # Stop trading for the day if equity grows by 15%

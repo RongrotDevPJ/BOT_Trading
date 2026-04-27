@@ -159,25 +159,15 @@ class TradeExecutor:
             self._handle_retcode(result, request)
             return False
 
-    def manage_trailing_stop(self, positions, tick):
-        """
-        [DEPRECATED/LEGACY] Use apply_trailing_stop for newer logic.
-        """
-        pass # Will be replaced by apply_trailing_stop in main loops
 
-    def apply_break_even(self, symbol, activation_points=300, lock_points=20):
+
+    def apply_break_even(self, symbol, positions, tick, info, activation_points=300, lock_points=20):
         """
         If profit exceeds activation_points, moves SL to Entry + lock_points.
         Guarantees no loss once a certain profit threshold is met.
+        Accepts pre-fetched positions, tick, and symbol info to avoid redundant MT5 API calls.
         """
-        # Optimization: Fetch ONLY positions for this symbol from MT5 terminal directly
-        positions = ag.positions_get(symbol=symbol)
-        if not positions:
-            return
-
-        tick = ag.symbol_info_tick(symbol)
-        info = ag.symbol_info(symbol)
-        if not tick or not info:
+        if not positions or not tick or not info:
             return
 
         point = info.point
@@ -205,19 +195,14 @@ class TradeExecutor:
                         self.modify_sl(p.ticket, symbol, target_sl)
                         self.logger.info(f"💎 BE: Moved SELL SL for {p.ticket} to {target_sl}")
 
-    def apply_trailing_stop(self, symbol, atr=None):
+    def apply_trailing_stop(self, symbol, positions, tick, info, atr=None):
         """
         Moves SL dynamically based on ATR or fixed steps.
         If ATR is provided: trail_dist = ATR * 1.5, step_dist = ATR * 0.5.
         Trailing Step ensures we don't spam modifications too often.
+        Accepts pre-fetched positions, tick, and symbol info to avoid redundant MT5 API calls.
         """
-        positions = ag.positions_get(symbol=symbol)
-        if not positions:
-            return
-
-        tick = ag.symbol_info_tick(symbol)
-        info = ag.symbol_info(symbol)
-        if not tick or not info:
+        if not positions or not tick or not info:
             return
 
         point = info.point
@@ -277,7 +262,7 @@ class TradeExecutor:
             self._handle_retcode(result, request)
             return False
 
-    def close_position(self, position, tick, strategy_instance=None):
+    def close_position(self, position, tick, strategy_instance=None, is_trailing_stop=False):
         """Sends an inverse market order to close a single position and logs excursion data."""
         order_type = ag.ORDER_TYPE_SELL if position.type == 0 else ag.ORDER_TYPE_BUY
         price = tick.bid if order_type == ag.ORDER_TYPE_SELL else tick.ask
@@ -298,6 +283,7 @@ class TradeExecutor:
             "comment": "Bot Partial Close",
             "type_time": ag.ORDER_TIME_GTC,
             "type_filling": self.get_filling_mode(position.symbol),
+            "is_trailing_stop": is_trailing_stop # Internal flag for slippage armor
         }
         
         self.logger.info(f"Closing Position {position.ticket}")
@@ -383,10 +369,14 @@ class TradeExecutor:
                 self.logger.critical(f"{emoji} GHOST TP TRIGGERED (BUY)! Target ${dynamic_target:.2f} USC reached. Bid {tick.bid:.5f} >= Target Price {basket_tp_price:.5f}. Securing profits!")
                 for p in side_positions:
                     self.close_position(p, tick, strategy_instance=strategy_instance)
+                    if strategy_instance and hasattr(strategy_instance, 'active_excursions'):
+                        strategy_instance.active_excursions.pop(p.ticket, None)
             elif side == 1 and tick.ask <= basket_tp_price:
                 self.logger.critical(f"{emoji} GHOST TP TRIGGERED (SELL)! Target ${dynamic_target:.2f} USC reached. Ask {tick.ask:.5f} <= Target Price {basket_tp_price:.5f}. Securing profits!")
                 for p in side_positions:
                     self.close_position(p, tick, strategy_instance=strategy_instance)
+                    if strategy_instance and hasattr(strategy_instance, 'active_excursions'):
+                        strategy_instance.active_excursions.pop(p.ticket, None)
 
     def _send_order_with_retry(self, request):
         """
@@ -395,6 +385,9 @@ class TradeExecutor:
         """
         MAX_RETRIES = 3
         RETRY_DELAYS = [0.5, 1.0, 2.0]
+        
+        # Extract and remove internal flag for slippage armor
+        is_trailing_stop = request.pop('is_trailing_stop', False)
         
         # We try up to MAX_RETRIES times (total attempts = 1 + MAX_RETRIES)
         for i in range(MAX_RETRIES + 1):
@@ -483,7 +476,28 @@ class TradeExecutor:
                     self.logger.error(f"❌ Failed after {MAX_RETRIES} retries. Final Code: {code}")
                     return result
             
-            # 4. Unknown/Other code (Default fallback)
+            # 4. Trailing Stop Slippage Armor (Emergency Fallback)
+            if is_trailing_stop and code in [ag.TRADE_RETCODE_REQUOTE, ag.TRADE_RETCODE_PRICE_CHANGED, ag.TRADE_RETCODE_INVALID_PRICE]:
+                self.logger.critical(f"⚠️ [Slippage Armor] Trailing Stop closure failed with code {code}. Activating emergency Market Order...")
+                
+                # Force maximum deviation and refresh price for the final attempt
+                tick = ag.symbol_info_tick(request['symbol'])
+                if tick:
+                    request['price'] = tick.ask if request['type'] == ag.ORDER_TYPE_BUY else tick.bid
+                    request['price'] = self.normalize_price(request['price'], request['symbol'])
+                    request['deviation'] = 1000 # Maximize slippage allowance
+                    
+                    self.logger.info(f"🛡️ Armor Attempt: Price={request['price']}, Deviation={request['deviation']}")
+                    armor_result = ag.order_send(request)
+                    if armor_result and armor_result.retcode == ag.TRADE_RETCODE_DONE:
+                        self.logger.info("✅ Slippage Armor SUCCESS! Position secured.")
+                        return armor_result
+                    else:
+                        final_code = armor_result.retcode if armor_result else "Unknown"
+                        self.logger.error(f"❌ Slippage Armor FAILED (Code: {final_code}).")
+                        return armor_result
+
+            # 5. Unknown/Other code (Default fallback)
             self.logger.error(f"Order failed with code {code}. No retry policy for this code.")
             return result
 

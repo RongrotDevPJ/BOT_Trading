@@ -11,11 +11,16 @@ if str(project_root) not in sys.path:
 
 from shared_utils.csv_logger import CSVLogger
 from shared_utils.news_filter import is_safe_to_trade
+from shared_utils.notifier import send_telegram_message
+from shared_utils.indicator import IndicatorClient
+from shared_utils.db_manager import DBManager
 
 class SmartGridStrategy:
     def __init__(self):
         self.logger = logging.getLogger("SmartGrid")
         self.csv_logger = CSVLogger(config.SYMBOL)
+        self.indicator = IndicatorClient()  # Phase 5: Order Flow filter
+        self.db = DBManager()               # Phase 5: Kelly position sizing
         self.hedged_this_session = False # Prevent multiple hedges in the same run
         self.last_dynamic_log_time = 0 # Prevent log spam
         self.last_trend_log_time = 0
@@ -32,6 +37,10 @@ class SmartGridStrategy:
         self.max_basket_mfe = -1000000.0  # MFE (in USC)
         self.initial_signals = ""         # Stored signals of the first entry
 
+        # Phase 5: Consecutive Loss Circuit Breaker
+        self.consecutive_losses = 0
+        self.cooldown_until = 0.0
+        self._had_active_cycle = False
 
     def is_max_drawdown_reached(self, executor, tick):
          """Checks if current account drawdown exceeds the max limit and performs Hedging if enabled."""
@@ -165,6 +174,14 @@ class SmartGridStrategy:
         if time.time() - self.last_initial_entry_time < 10.0:
             return
 
+        # Phase 5: Consecutive Loss Cooldown Gate
+        if time.time() < self.cooldown_until:
+            remaining = int(self.cooldown_until - time.time())
+            if current_time - self.last_initial_log_time > 60:
+                self.logger.warning(f"⏸️ [CircuitBreaker] Cooldown active for {config.SYMBOL}. New entries blocked for {remaining}s.")
+                self.last_initial_log_time = current_time
+            return
+
         positions = self.get_positions()
         buy_positions = [p for p in positions if p.type == 0]
         sell_positions = [p for p in positions if p.type == 1]
@@ -207,11 +224,24 @@ class SmartGridStrategy:
             if current_time - self.last_initial_log_time > 60:
                 self.logger.info(f"✨ [Analysis] Initial BUY Entry Triggered: RSI={current_rsi:.2f} <= {config.RSI_BUY_LEVEL} {stoch_str} {trend_str}")
                 self.last_initial_log_time = current_time
-            
+
+            # --- Phase 5: Tick Imbalance / Falling Knife Filter ---
+            imb_threshold = getattr(config, 'TICK_IMBALANCE_THRESHOLD', 0.3)
+            imb_lookback  = getattr(config, 'TICK_IMBALANCE_LOOKBACK_SEC', 60)
+            tick_imb = self.indicator.get_tick_imbalance(config.SYMBOL, lookback_seconds=imb_lookback)
+            if tick_imb is not None and tick_imb < -imb_threshold:
+                self.logger.warning(
+                    f"🔪 [Falling Knife Detected] BUY blocked on {config.SYMBOL}. "
+                    f"Tick Imbalance={tick_imb:+.3f} < -{imb_threshold} (heavy selling pressure). "
+                    f"RSI={current_rsi:.2f} – waiting for next loop."
+                )
+                return
+
             initial_lot = self.get_dynamic_lot(0, equity)
             
             # Capture Initial Entry Signals for Analytics
-            self.initial_signals = f"RSI:{current_rsi:.2f} | ATR:{current_atr:.5f} | EMA:{current_ema:.5f}"
+            imb_str = f" | TickImb:{tick_imb:+.3f}" if tick_imb is not None else ""
+            self.initial_signals = f"RSI:{current_rsi:.2f} | ATR:{current_atr:.5f} | EMA:{current_ema:.5f}{imb_str}"
             if enable_stoch and current_stoch:
                 self.initial_signals += f" | Stoch:{current_stoch[0]:.2f}"
 
@@ -231,9 +261,33 @@ class SmartGridStrategy:
             if current_time - self.last_initial_log_time > 60:
                 self.logger.info(f"✨ [Analysis] Initial SELL Entry Triggered: RSI={current_rsi:.2f} >= {config.RSI_SELL_LEVEL} {stoch_str} {trend_str}")
                 self.last_initial_log_time = current_time
-            
-            initial_lot = self.get_dynamic_lot(0, equity)
-            result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, initial_lot, tick.bid, atr_value=current_atr, rsi_value=current_rsi, grid_level=1, cycle_id=None)
+
+            # --- Phase 5: Tick Imbalance / Buying Surge Filter ---
+            imb_threshold = getattr(config, 'TICK_IMBALANCE_THRESHOLD', 0.3)
+            imb_lookback  = getattr(config, 'TICK_IMBALANCE_LOOKBACK_SEC', 60)
+            tick_imb = self.indicator.get_tick_imbalance(config.SYMBOL, lookback_seconds=imb_lookback)
+            if tick_imb is not None and tick_imb > imb_threshold:
+                self.logger.warning(
+                    f"🚀 [Buying Surge Detected] SELL blocked on {config.SYMBOL}. "
+                    f"Tick Imbalance={tick_imb:+.3f} > +{imb_threshold} (heavy buying pressure). "
+                    f"RSI={current_rsi:.2f} – waiting for next loop."
+                )
+                return
+
+            initial_lot = self.get_dynamic_lot(1, equity)
+
+            # Capture Initial Entry Signals for Analytics
+            imb_str = f" | TickImb:{tick_imb:+.3f}" if tick_imb is not None else ""
+            self.initial_signals = f"RSI:{current_rsi:.2f} | ATR:{current_atr:.5f} | EMA:{current_ema:.5f}{imb_str}"
+            if enable_stoch and current_stoch:
+                self.initial_signals += f" | Stoch:{current_stoch[0]:.2f}"
+
+            result = executor.send_order(
+                config.SYMBOL, ag.ORDER_TYPE_SELL, initial_lot, tick.bid,
+                atr_value=current_atr, rsi_value=current_rsi,
+                grid_level=1, cycle_id=None,
+                entry_signals=self.initial_signals
+            )
             if result:
                 self.last_initial_entry_time = time.time()
                 self.csv_logger.log_event(action="Initial Entry", side="SELL", price=tick.bid, rsi=current_rsi, ema=current_ema, lot_size=initial_lot, ticket=result.order, notes=stoch_str)
@@ -260,14 +314,71 @@ class SmartGridStrategy:
          return base_distance * multiplier
 
     def calculate_dynamic_lot(self, current_equity):
-        """Phase 3: Cent-Account safe lot calculation."""
+        """
+        Phase 5: Fractional Kelly Criterion position sizing.
+
+        Decision tree:
+          1. AUTO_LOT disabled        → return DEFAULT_LOT (manual override)
+          2. < KELLY_MIN_TRADES hist  → return linear equity lot (warm-up fallback)
+          3. Kelly % <= 0             → edge has decayed; return MIN_LOT (sit tight)
+          4. Normal Kelly path        → fractional Kelly, clamped to [MIN_LOT, MAX_LOT]
+
+        Formula:
+            Kelly%  = W - ((1 - W) / R)
+            Adj%    = Kelly% * KELLY_FRACTION          # e.g. 0.25 = "quarter Kelly"
+            Adj%    = min(Adj%, KELLY_MAX_FRACTION)    # hard cap for safety
+            lot_raw = current_equity * Adj% * (BASE_LOT / BASE_EQUITY)
+        """
         if not getattr(config, 'AUTO_LOT', False):
             return config.DEFAULT_LOT
-        
-        # Scaling logic: BASE_LOT per BASE_EQUITY (e.g. 0.10 lot per $50)
-        raw_lot = (current_equity / config.BASE_EQUITY) * config.BASE_LOT
-        calculated_lot = round(raw_lot, 2)
-        return max(config.MIN_LOT, min(calculated_lot, config.MAX_LOT))
+
+        kelly_fraction     = getattr(config, 'KELLY_FRACTION',     0.25)
+        kelly_min_trades   = getattr(config, 'KELLY_MIN_TRADES',   10)
+        kelly_max_fraction = getattr(config, 'KELLY_MAX_FRACTION', 0.20)
+
+        # --- Pull 30-day stats from DB ---
+        stats = self.db.get_symbol_stats_30d(config.SYMBOL)
+
+        # Fallback 1: insufficient history → warm-up with linear equity sizing
+        if stats is None or stats["total_trades"] < kelly_min_trades:
+            trades_seen = stats["total_trades"] if stats else 0
+            self.logger.info(
+                f"[Kelly] {config.SYMBOL}: Only {trades_seen} closed trades "
+                f"(need {kelly_min_trades}). Using linear equity fallback."
+            )
+            raw_lot = (current_equity / config.BASE_EQUITY) * config.BASE_LOT
+            return max(config.MIN_LOT, min(round(raw_lot, 2), config.MAX_LOT))
+
+        W = stats["win_rate"]
+        R = stats["risk_reward"]
+
+        # --- Core Kelly formula ---
+        kelly_pct = W - ((1.0 - W) / R)
+
+        # Fallback 2: negative Kelly → strategy has no edge right now → size down hard
+        if kelly_pct <= 0:
+            self.logger.warning(
+                f"[Kelly] {config.SYMBOL}: Negative Kelly ({kelly_pct:.4f}) — "
+                f"W={W:.3f}, R={R:.3f}. Sizing to MIN_LOT until edge recovers."
+            )
+            return config.MIN_LOT
+
+        # Apply fractional Kelly and hard cap
+        adjusted_pct = kelly_pct * kelly_fraction
+        adjusted_pct = min(adjusted_pct, kelly_max_fraction)
+
+        # Map equity fraction to lot size using BASE_EQUITY/BASE_LOT scale
+        lot_per_unit   = config.BASE_LOT / config.BASE_EQUITY
+        lot_raw        = current_equity * adjusted_pct * lot_per_unit
+        calculated_lot = round(lot_raw, 2)
+        final_lot      = max(config.MIN_LOT, min(calculated_lot, config.MAX_LOT))
+
+        self.logger.info(
+            f"[Kelly] {config.SYMBOL}: W={W:.3f} | R={R:.3f} | "
+            f"Kelly%={kelly_pct:.4f} | Adj%={adjusted_pct:.4f} | "
+            f"Equity={current_equity:.2f} | Lot={final_lot}"
+        )
+        return final_lot
 
     def get_dynamic_lot(self, num_positions, equity):
          """Calculates lot size based on equity and grid multiplier."""
@@ -423,10 +534,24 @@ class SmartGridStrategy:
         """
         positions = self.get_positions()
         if not positions:
-            self.max_basket_pnl = -1000000.0 # Reset trailing trigger
-            self.min_basket_pnl = 1000000.0  # Reset MAE
-            self.max_basket_mfe = -1000000.0 # Reset MFE
+            if self._had_active_cycle and self.max_basket_pnl == -1000000.0:
+                self.consecutive_losses += 1
+                self.logger.warning(f"⚠️ [CircuitBreaker] Cycle on {config.SYMBOL} ended without profit peak. Consecutive losses: {self.consecutive_losses}")
+                max_losses = getattr(config, 'MAX_CONSECUTIVE_LOSSES', 3)
+                if self.consecutive_losses >= max_losses:
+                    msg = (f"🚨 CIRCUIT BREAKER TRIGGERED on {config.SYMBOL}! "
+                           f"{max_losses} consecutive losing cycles. Entering 1-hour cooldown.")
+                    self.logger.critical(msg)
+                    send_telegram_message(msg)
+                    self.cooldown_until = time.time() + 3600
+                    self.consecutive_losses = 0
+            self._had_active_cycle = False
+            self.max_basket_pnl = -1000000.0
+            self.min_basket_pnl = 1000000.0
+            self.max_basket_mfe = -1000000.0
             return
+
+        self._had_active_cycle = True
             
         # 1. Calculate Dynamic Profit Target (Trigger)
         oldest_pos = min(positions, key=lambda p: p.time)
@@ -474,8 +599,25 @@ class SmartGridStrategy:
             if total_pnl < self.max_basket_pnl - trailing_step:
                 self.logger.critical(f"🚀 [Basket Trailing] TRAILING STOP HIT! Current PnL: ${total_pnl:.2f} < Max (${self.max_basket_pnl:.2f}) - Step (${trailing_step:.2f}). Closing all {len(positions)} positions.")
                 for p in positions:
-                    executor.close_position(p, tick)
-                self.max_basket_pnl = -1000000.0 # Reset after hitting
+                    executor.close_position(p, tick, is_trailing_stop=True)
+                    self.active_excursions.pop(p.ticket, None)
+                max_losses = getattr(config, 'MAX_CONSECUTIVE_LOSSES', 3)
+                if total_pnl <= 0:
+                    self.consecutive_losses += 1
+                    self.logger.warning(f"⚠️ [CircuitBreaker] Losing cycle on {config.SYMBOL}. Consecutive: {self.consecutive_losses}/{max_losses}")
+                    if self.consecutive_losses >= max_losses:
+                        msg = (f"🚨 CIRCUIT BREAKER TRIGGERED on {config.SYMBOL}! "
+                               f"{max_losses} consecutive losing cycles. Entering 1-hour cooldown.")
+                        self.logger.critical(msg)
+                        send_telegram_message(msg)
+                        self.cooldown_until = time.time() + 3600
+                        self.consecutive_losses = 0
+                else:
+                    if self.consecutive_losses > 0:
+                        self.logger.info(f"✅ [CircuitBreaker] Winning cycle on {config.SYMBOL}. Counter reset.")
+                    self.consecutive_losses = 0
+                self._had_active_cycle = False
+                self.max_basket_pnl = -1000000.0
 
              
     def _update_tps_if_needed(self, executor, positions, new_tp):

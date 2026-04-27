@@ -9,7 +9,6 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 import logging
-from logging.handlers import TimedRotatingFileHandler
 import time
 import datetime
 import config 
@@ -20,10 +19,11 @@ from shared_utils.indicator import IndicatorClient
 from shared_utils.time_filter import TimeFilterClient
 from shared_utils.display_manager import render_dashboard
 from strategy import SmartGridStrategy
-from shared_utils.global_risk_manager import check_global_drawdown, is_trading_suspended
+from shared_utils.global_risk_manager import is_trading_suspended, check_margin_level, MarginStatus
 from shared_utils.notifier import send_telegram_message
 from shared_utils.news_filter import is_safe_to_trade as is_news_safe
 from shared_utils.system_logger import setup_logger
+from shared_utils.correlation_manager import CorrelationGuard
 
 # Setup Persistent Logging
 logger = setup_logger(f"{config.SYMBOL}_Bot")
@@ -52,6 +52,7 @@ def main():
     strategy = SmartGridStrategy()
     indicator_client = IndicatorClient()
     time_filter = TimeFilterClient()
+    correlation_guard = CorrelationGuard()
 
     # Try to connect
     if not client.connect():
@@ -88,6 +89,7 @@ def main():
     try:
         while True:
             current_time = time.time()
+            close_only_mode = False  # Default; may be overridden by account DD check below
             
             # 1. Check connection
             if not client.is_connected():
@@ -136,6 +138,15 @@ def main():
                     if current_time - last_ui_data_update >= 60:
                         logger.warning(f"⚠️ SOFT STOP ACTIVE: DD at {current_dd:.2f}% (> {soft_stop_limit:.2f}%). Entering Close-Only mode.")
                 
+                # Margin Level Circuit Breaker (Phase 5)
+                margin_status = check_margin_level()
+                if margin_status == MarginStatus.SOFT_STOP:
+                    close_only_mode = True
+                    if current_time - last_ui_data_update >= 60:
+                        logger.warning("⚠️ [MarginGuard] Margin SOFT STOP active. Blocking new initial entries.")
+                elif margin_status == MarginStatus.EMERGENCY:
+                    continue
+
             mt5_status = "CONNECTED" if client.is_connected() else "DISCONNECTED"
             
             # Update UI Data Cache every 10 seconds
@@ -338,7 +349,9 @@ def main():
 
                 # Check Time Filter AND Daily Target AND News Filter before allowing NEW initial entries
                 if not daily_target_reached and not close_only_mode and time_filter.is_allowed_to_trade() and is_news_safe(config.SYMBOL):
-                    strategy.check_initial_entry(executor, current_rsi, current_ema, tick, current_stoch=current_stoch, current_atr=current_atr, equity=cached_equity)
+                    # Phase 3: Correlation Guard Check
+                    if correlation_guard.is_allowed_to_open_initial(config.SYMBOL):
+                        strategy.check_initial_entry(executor, current_rsi, current_ema, tick, current_stoch=current_stoch, current_atr=current_atr, equity=cached_equity)
 
                 # Execute grid logic (Always allowed even if target reached, to close existing grid)
                 # However, if SOFT STOP (close_only_mode) is active, we don't open NEW grid levels
@@ -353,8 +366,8 @@ def main():
                 executor.ghost_close_check(positions, tick, strategy)
                 executor.manage_partial_close(positions, tick)
                 # Apply Break-Even and Trailing Stop
-                executor.apply_break_even(config.SYMBOL, activation_points=300, lock_points=20)
-                executor.apply_trailing_stop(config.SYMBOL, atr=current_atr)
+                executor.apply_break_even(config.SYMBOL, positions, tick, symbol_info, activation_points=300, lock_points=20)
+                executor.apply_trailing_stop(config.SYMBOL, positions, tick, symbol_info, atr=current_atr)
 
             except Exception as e:
                 logger.error(f"Error during strategy execution: {e}", exc_info=True)

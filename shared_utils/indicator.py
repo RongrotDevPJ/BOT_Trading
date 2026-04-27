@@ -1,5 +1,6 @@
 import MetaTrader5 as ag
 import logging
+import datetime
 
 class IndicatorClient:
     def __init__(self):
@@ -190,3 +191,69 @@ class IndicatorClient:
             return None, None
 
         return self._calculate_stochastic(rates, k_period, d_period, slowing)
+
+    def get_tick_imbalance(self, symbol, lookback_seconds=60):
+        """
+        Phase 5 – Order Flow / Tick Imbalance Filter.
+
+        Fetches raw ticks for the past `lookback_seconds` and classifies each
+        tick as an up-tick (ask rose vs previous ask) or a down-tick (ask fell).
+        Returns a normalised imbalance score in the range [-1.0, +1.0]:
+            +1.0  → 100 % of ticks were up-ticks  (strong buying pressure)
+            -1.0  → 100 % of ticks were down-ticks (strong selling pressure)
+             0.0  → perfectly balanced
+
+        Returns None if there is insufficient tick data (e.g. market closed or
+        broker issue) so callers can degrade gracefully.
+        """
+        try:
+            utc_now  = datetime.datetime.utcnow()
+            utc_from = utc_now - datetime.timedelta(seconds=lookback_seconds)
+
+            ticks = ag.copy_ticks_range(
+                symbol,
+                utc_from,
+                utc_now,
+                ag.COPY_TICKS_ALL
+            )
+
+            if ticks is None or len(ticks) < 2:
+                self.logger.debug(
+                    f"[TickImbalance] Insufficient tick data for {symbol} "
+                    f"(got {len(ticks) if ticks is not None else 0} ticks)."
+                )
+                return None
+
+            up_ticks   = 0
+            down_ticks = 0
+
+            # Walk tick array and compare consecutive ask prices
+            prev_ask = float(ticks[0]['ask'])
+            for i in range(1, len(ticks)):
+                current_ask = float(ticks[i]['ask'])
+                if current_ask > prev_ask:
+                    up_ticks += 1
+                elif current_ask < prev_ask:
+                    down_ticks += 1
+                prev_ask = current_ask
+
+            total = up_ticks + down_ticks
+            if total == 0:
+                # All ticks had identical ask price – treat as neutral
+                return 0.0
+
+            # Normalise: ranges from -1.0 (all down) to +1.0 (all up)
+            imbalance_score = (up_ticks - down_ticks) / total
+
+            self.logger.debug(
+                f"[TickImbalance] {symbol} | "
+                f"Ticks={len(ticks)} | Up={up_ticks} | Down={down_ticks} | "
+                f"Score={imbalance_score:+.3f}"
+            )
+            return imbalance_score
+
+        except Exception as e:
+            self.logger.warning(
+                f"[TickImbalance] Error calculating tick imbalance for {symbol}: {e}"
+            )
+            return None

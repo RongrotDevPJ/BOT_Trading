@@ -29,8 +29,8 @@ class DBManager:
     def get_connection(self):
         """Returns a connection to the SQLite database with row factory enabled."""
         try:
-            # Multi-process safety: set timeout to 30s to wait for locks
-            conn = sqlite3.connect(str(self.db_path), timeout=30.0)
+            # Multi-process safety: set timeout to 20s to wait for locks
+            conn = sqlite3.connect(str(self.db_path), timeout=20)
             conn.row_factory = sqlite3.Row
             # WAL mode is critical for concurrent multi-process access
             conn.execute('PRAGMA journal_mode=WAL;')
@@ -225,6 +225,97 @@ class DBManager:
             finally:
                 conn.close()
         return 0.0
+
+    def get_symbol_stats_30d(self, symbol):
+        """
+        Phase 5 – Fractional Kelly Position Sizing.
+
+        Queries the last 30 days of CLOSED trades for `symbol` and computes
+        the two inputs needed by the Kelly formula:
+
+            Win Rate  (W)  = winning_trades / total_trades       → [0.0, 1.0]
+            Risk/Reward (R) = avg_win_profit / avg_loss_abs      → > 0.0
+
+        Returns a dict:
+            {
+                "win_rate":       float,   # e.g. 0.62
+                "risk_reward":    float,   # e.g. 1.85
+                "total_trades":   int,
+                "winning_trades": int,
+                "losing_trades":  int,
+                "avg_win":        float,
+                "avg_loss":       float,   # stored as positive number
+            }
+
+        Returns None if:
+          - DB connection fails
+          - Fewer than `min_trades` records exist (caller decides threshold)
+          - No losing trades exist (can't calculate R; degenerate edge)
+        """
+        sql = """
+            SELECT
+                COUNT(*)                                              AS total_trades,
+                SUM(CASE WHEN profit > 0 THEN 1 ELSE 0 END)          AS winning_trades,
+                SUM(CASE WHEN profit < 0 THEN 1 ELSE 0 END)          AS losing_trades,
+                AVG(CASE WHEN profit > 0 THEN profit ELSE NULL END)   AS avg_win,
+                AVG(CASE WHEN profit < 0 THEN profit ELSE NULL END)   AS avg_loss
+            FROM trades
+            WHERE symbol    = ?
+              AND status    = 'CLOSED'
+              AND timestamp >= datetime('now', '-30 days')
+        """
+        conn = self.get_connection()
+        if conn is None:
+            self.logger.error("[KellyStats] Cannot connect to DB.")
+            return None
+        try:
+            with closing(conn.cursor()) as cursor:
+                cursor.execute(sql, (symbol,))
+                row = cursor.fetchone()
+
+            if row is None or row["total_trades"] == 0:
+                self.logger.debug(f"[KellyStats] No closed trades found for {symbol} in last 30d.")
+                return None
+
+            total     = int(row["total_trades"])
+            wins      = int(row["winning_trades"] or 0)
+            losses    = int(row["losing_trades"]  or 0)
+            avg_win   = float(row["avg_win"]  or 0.0)
+            avg_loss  = float(row["avg_loss"] or 0.0)   # negative number from DB
+
+            # Guard: need at least one win AND one loss to compute R meaningfully
+            if wins == 0 or losses == 0 or avg_loss == 0.0:
+                self.logger.debug(
+                    f"[KellyStats] {symbol}: wins={wins}, losses={losses} — "
+                    f"degenerate history, cannot compute Kelly."
+                )
+                return None
+
+            win_rate    = wins / total
+            avg_loss_abs = abs(avg_loss)           # convert to positive
+            risk_reward  = avg_win / avg_loss_abs  # R = avg_win / avg_loss
+
+            self.logger.debug(
+                f"[KellyStats] {symbol} 30d | "
+                f"Trades={total} | W={win_rate:.3f} | R={risk_reward:.3f} | "
+                f"AvgWin={avg_win:.4f} | AvgLoss={avg_loss_abs:.4f}"
+            )
+            return {
+                "win_rate":       win_rate,
+                "risk_reward":    risk_reward,
+                "total_trades":   total,
+                "winning_trades": wins,
+                "losing_trades":  losses,
+                "avg_win":        avg_win,
+                "avg_loss":       avg_loss_abs,
+            }
+
+        except Exception as e:
+            self.logger.error(f"[KellyStats] Error querying stats for {symbol}: {e}")
+            return None
+        finally:
+            conn.close()
+
 
     def archive_old_data(self, days=90):
         """Queues an archival task and a subsequent WAL checkpoint."""

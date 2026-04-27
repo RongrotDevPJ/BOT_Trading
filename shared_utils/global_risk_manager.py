@@ -1,5 +1,6 @@
 import MetaTrader5 as mt5
 from datetime import datetime
+from enum import Enum
 import logging
 import os
 import time
@@ -11,6 +12,71 @@ logger = logging.getLogger("GlobalRiskManager")
 # Path for the global stop flag
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 STOP_FLAG_PATH = PROJECT_ROOT / "GLOBAL_STOP.lock"
+
+# ── Margin Level Circuit Breaker ─────────────────────────────────────────────
+class MarginStatus(Enum):
+    OK        = "OK"       # Margin is healthy
+    WARNING   = "WARNING"  # Log only
+    SOFT_STOP = "SOFT_STOP"  # Block new initial entries
+    EMERGENCY = "EMERGENCY"  # Emergency close all positions
+
+MARGIN_LEVEL_WARNING   = 500.0  # % — start logging warnings
+MARGIN_LEVEL_SOFT_STOP = 300.0  # % — block new initial entries
+MARGIN_LEVEL_EMERGENCY = 150.0  # % — close everything
+
+class MarginLevelState:
+    """
+    TTL-cached margin level check — mirrors GlobalRiskState pattern.
+    30-second cache since margin level changes slowly.
+    """
+    _lock = threading.Lock()
+    _last_check_time = 0
+    _cached_status = MarginStatus.OK
+    _ttl = 30.0
+
+    @classmethod
+    def get_status(cls):
+        current_time = time.time()
+        with cls._lock:
+            if current_time - cls._last_check_time < cls._ttl:
+                return cls._cached_status
+
+            account = mt5.account_info()
+            if account is None:
+                logger.error("MarginLevelState: Failed to retrieve account info.")
+                return cls._cached_status
+
+            margin_level = account.margin_level  # 0.0 when no open positions
+
+            # margin_level == 0.0 means no open positions — treat as safe
+            if margin_level == 0.0 or margin_level > MARGIN_LEVEL_WARNING:
+                status = MarginStatus.OK
+            elif margin_level > MARGIN_LEVEL_SOFT_STOP:
+                logger.warning(f"⚠️ [MarginGuard] Margin Level WARNING: {margin_level:.1f}% (< {MARGIN_LEVEL_WARNING:.0f}%)")
+                status = MarginStatus.WARNING
+            elif margin_level > MARGIN_LEVEL_EMERGENCY:
+                logger.critical(f"🚨 [MarginGuard] SOFT STOP: Margin Level {margin_level:.1f}% < {MARGIN_LEVEL_SOFT_STOP:.0f}%. Blocking new entries.")
+                status = MarginStatus.SOFT_STOP
+            else:
+                logger.critical(f"🚨 [MarginGuard] EMERGENCY: Margin Level {margin_level:.1f}% < {MARGIN_LEVEL_EMERGENCY:.0f}%! Triggering emergency close!")
+                trigger_emergency_close(
+                    reason=f"Margin Level hit {margin_level:.1f}% (Emergency threshold: {MARGIN_LEVEL_EMERGENCY:.0f}%)",
+                    trigger_bot="MarginLevelGuard"
+                )
+                status = MarginStatus.EMERGENCY
+
+            cls._cached_status = status
+            cls._last_check_time = current_time
+            return status
+
+def check_margin_level() -> MarginStatus:
+    """
+    Returns the current MarginStatus based on account margin level.
+    Uses a 30-second TTL cache. Safe to call every loop tick.
+    """
+    return MarginLevelState.get_status()
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 class GlobalRiskState:
     """

@@ -20,16 +20,16 @@ MAX_GRID_LEVELS = 10         # Maximum number of grid levels allowed
 
 # --- Dynamic Grid Settings ---
 GRID_DISTANCE_POINTS = 300   # Base distance fallback
-MIN_GRID_DISTANCE_POINTS = 250 # Minimum distance for dynamic ATR grid
+MIN_GRID_DISTANCE_POINTS = 600 # Increased +50% based on quant data: high MAE means price over-extends before reversing
 ENABLE_ATR_DISTANCE = True    # Enable ATR-based dynamic grid distance
 ATR_PERIOD = 14
-ATR_MULTIPLIER = 2.0
+ATR_MULTIPLIER = 2.5
 MAX_GAP_MULTIPLIER = 4.0     # Pause if gap > 4x grid distance
 
 # --- Phase 2 Upgrades (Grid Multiplier & Basket Trailing) ---
 GRID_DISTANCE_MULTIPLIER = 1.3
 BASKET_TRAILING_TRIGGER_USD = 30.0
-BASKET_TRAILING_STEP_USD = 15.0
+BASKET_TRAILING_STEP_USD = 6.0   # Quant-optimized: tighter step to lock profits sooner (was 15.0)
 
 # --- Indicators & Filters Setup ---
 import MetaTrader5 as ag
@@ -42,6 +42,20 @@ RSI_SELL_LEVEL = 65          # Sell trigger level
 ENABLE_TREND_FILTER = True
 EMA_PERIOD = 200
 EMA_TIMEFRAME = ag.TIMEFRAME_M15
+
+# --- Phase 5: Order Flow / Tick Imbalance Filter ---
+# Score range: -1.0 (all selling) to +1.0 (all buying)
+# BUY  is blocked when imbalance < -TICK_IMBALANCE_THRESHOLD  (falling knife)
+# SELL is blocked when imbalance >  TICK_IMBALANCE_THRESHOLD  (buying surge)
+TICK_IMBALANCE_THRESHOLD = 0.3   # 0.0 = disabled effectively; 0.3 = institutional default
+TICK_IMBALANCE_LOOKBACK_SEC = 60  # Rolling window of ticks to evaluate
+
+# --- Phase 5: Fractional Kelly Criterion Position Sizing ---
+# Kelly % = W - ((1 - W) / R)  where W = Win Rate, R = Risk/Reward Ratio
+# Final lot = (equity * Kelly% * KELLY_FRACTION) / (BASE_EQUITY / BASE_LOT)
+KELLY_FRACTION  = 0.25   # Safety multiplier ("quarter Kelly"); range 0.1–0.5
+KELLY_MIN_TRADES = 10    # Min closed trades required; below this, fallback to DEFAULT_LOT
+KELLY_MAX_FRACTION = 0.20  # Hard cap: never risk more than 20% of equity on Kelly signal
 
 # --- Exit Strategy ---
 BASKET_TP_POINTS = 50        # Strategy TP profit goal in points
@@ -56,6 +70,7 @@ MIN_POSITIONS_FOR_PARTIAL = 5
 MAX_DD_PERCENT = 30.0        # Max drawdown before safety actions
 ENABLE_HEDGE_ON_DD = True    # Auto-hedge if DD reached
 COOLDOWN_MINUTES = 15        # Minimum time between grid orders
+MAX_CONSECUTIVE_LOSSES = 3   # Circuit breaker: pause 1h after N losing cycles
 HEARTBEAT_INTERVAL_SEC = 300 # Log bot status every 5 mins
 ENABLE_DAILY_TARGET = False  # Set to True to enable daily profit target
 DAILY_TARGET_PERCENT = 15.0  # Stop trading for the day if equity grows by 15%
