@@ -345,6 +345,10 @@ class SmartGridStrategy:
         # --- Pull 30-day stats from DB ---
         stats = self.db.get_symbol_stats_30d(config.SYMBOL)
 
+        # Calculate normal linear lot based on equity (e.g. 5000 -> 0.10)
+        raw_linear_lot = (current_equity / config.BASE_EQUITY) * config.BASE_LOT
+        base_linear_lot = max(config.MIN_LOT, min(round(raw_linear_lot, 2), config.MAX_LOT))
+
         # Fallback 1: insufficient history → warm-up with linear equity sizing
         if stats is None or stats["total_trades"] < kelly_min_trades:
             trades_seen = stats["total_trades"] if stats else 0
@@ -352,8 +356,7 @@ class SmartGridStrategy:
                 f"[Kelly] {config.SYMBOL}: Only {trades_seen} closed trades "
                 f"(need {kelly_min_trades}). Using linear equity fallback."
             )
-            raw_lot = (current_equity / config.BASE_EQUITY) * config.BASE_LOT
-            return max(config.MIN_LOT, min(round(raw_lot, 2), config.MAX_LOT))
+            return base_linear_lot
 
         W = stats["win_rate"]
         R = stats["risk_reward"]
@@ -361,33 +364,30 @@ class SmartGridStrategy:
         # --- Core Kelly formula ---
         kelly_pct = W - ((1.0 - W) / R)
 
-        # Fallback 2: negative Kelly → strategy has no edge right now → size down hard
+        # Fallback 2: negative Kelly → strategy has no edge right now → lock at base linear lot
         if kelly_pct <= 0:
             self.logger.warning(
                 f"[Kelly] {config.SYMBOL}: Negative Kelly ({kelly_pct:.4f}) — "
-                f"W={W:.3f}, R={R:.3f}. Sizing to MIN_LOT until edge recovers."
+                f"W={W:.3f}, R={R:.3f}. Reverting to base linear lot: {base_linear_lot}."
             )
-            return config.MIN_LOT
+            return base_linear_lot
 
         # Apply fractional Kelly and hard cap
         adjusted_pct = kelly_pct * kelly_fraction
         adjusted_pct = min(adjusted_pct, kelly_max_fraction)
 
-        # Calculate normal linear lot based on equity (e.g. 6000 -> 0.12)
-        base_linear_lot = (current_equity / config.BASE_EQUITY) * config.BASE_LOT
+        # Base lot is the floor. Kelly provides a proportional boost.
+        # kelly_bonus_multiplier ranges from 0.0 to 1.0 (0% to +100% boost)
+        kelly_bonus_multiplier = adjusted_pct / kelly_max_fraction
+        final_multiplier = 1.0 + kelly_bonus_multiplier
         
-        # Use Kelly fraction as a multiplier relative to the MAX cap
-        # If adjusted_pct hits the max cap (0.20), multiplier is 1.0 (Full 0.12 lot)
-        # If adjusted_pct is 0.10, multiplier is 0.5 (Half lot -> 0.06)
-        kelly_multiplier = adjusted_pct / kelly_max_fraction
-        
-        lot_raw = base_linear_lot * kelly_multiplier
+        lot_raw = base_linear_lot * final_multiplier
         calculated_lot = round(lot_raw, 2)
         final_lot      = max(config.MIN_LOT, min(calculated_lot, config.MAX_LOT))
 
         self.logger.info(
             f"[Kelly] {config.SYMBOL}: W={W:.3f} | R={R:.3f} | "
-            f"Kelly%={kelly_pct:.4f} | Adj%={adjusted_pct:.4f} | "
+            f"Kelly%={kelly_pct:.4f} | BonusMultiplier={final_multiplier:.2f}x | "
             f"Equity={current_equity:.2f} | Lot={final_lot}"
         )
         return final_lot
