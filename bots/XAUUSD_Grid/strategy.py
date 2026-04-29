@@ -168,6 +168,12 @@ class SmartGridStrategy:
 
     def check_initial_entry(self, executor, current_rsi, current_ema, tick, current_stoch=None, current_atr=None, equity=0):
         """Checks RSI, Stochastic, and EMA to determine if a first trade should be opened."""
+        # --- SESSION FILTER ---
+        if getattr(config, 'ENABLE_SESSION_FILTER', False):
+            from shared_utils.time_filter import is_in_trading_session
+            if not is_in_trading_session(config.TRADING_HOURS_START, config.TRADING_HOURS_END):
+                return False # Block new entries outside allowed hours
+
         if current_rsi is None or tick is None or current_ema is None:
             return
 
@@ -367,9 +373,15 @@ class SmartGridStrategy:
         adjusted_pct = kelly_pct * kelly_fraction
         adjusted_pct = min(adjusted_pct, kelly_max_fraction)
 
-        # Map equity fraction to lot size using BASE_EQUITY/BASE_LOT scale
-        lot_per_unit   = config.BASE_LOT / config.BASE_EQUITY
-        lot_raw        = current_equity * adjusted_pct * lot_per_unit
+        # Calculate normal linear lot based on equity (e.g. 6000 -> 0.12)
+        base_linear_lot = (current_equity / config.BASE_EQUITY) * config.BASE_LOT
+        
+        # Use Kelly fraction as a multiplier relative to the MAX cap
+        # If adjusted_pct hits the max cap (0.20), multiplier is 1.0 (Full 0.12 lot)
+        # If adjusted_pct is 0.10, multiplier is 0.5 (Half lot -> 0.06)
+        kelly_multiplier = adjusted_pct / kelly_max_fraction
+        
+        lot_raw = base_linear_lot * kelly_multiplier
         calculated_lot = round(lot_raw, 2)
         final_lot      = max(config.MIN_LOT, min(calculated_lot, config.MAX_LOT))
 
@@ -596,8 +608,9 @@ class SmartGridStrategy:
                     
         # 5. Check if trailing stop is hit
         if self.max_basket_pnl > -1000000.0:
-            if total_pnl < self.max_basket_pnl - trailing_step:
-                self.logger.critical(f"🚀 [Basket Trailing] TRAILING STOP HIT! Current PnL: ${total_pnl:.2f} < Max (${self.max_basket_pnl:.2f}) - Step (${trailing_step:.2f}). Closing all {len(positions)} positions.")
+            exit_point = max(1.0, self.max_basket_pnl - trailing_step)
+            if total_pnl < exit_point:
+                self.logger.critical(f"🚀 [Basket Trailing] TRAILING STOP HIT! Current PnL: ${total_pnl:.2f} < Exit Point (${exit_point:.2f}). Closing all {len(positions)} positions.")
                 for p in positions:
                     executor.close_position(p, tick, is_trailing_stop=True)
                     self.active_excursions.pop(p.ticket, None)

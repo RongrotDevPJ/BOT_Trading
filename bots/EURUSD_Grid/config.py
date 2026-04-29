@@ -74,7 +74,11 @@ MAX_CONSECUTIVE_LOSSES = 3   # Circuit breaker: pause 1h after N losing cycles
 HEARTBEAT_INTERVAL_SEC = 300 # Log bot status every 5 mins
 ENABLE_DAILY_TARGET = False  # Set to True to enable daily profit target
 DAILY_TARGET_PERCENT = 15.0  # Stop trading for the day if equity grows by 15%
-
+DAILY_TARGET_TRAILING_PERCENT = 2.0  # Trailing distance from peak equity (%)
+# --- Session Filter ---
+ENABLE_SESSION_FILTER = False
+TRADING_HOURS_START = "00:00"
+TRADING_HOURS_END = "23:59"
 # --- Time Filter ---
 ALLOW_FRIDAY_TRADING = False
 FRIDAY_STOP_HOUR = 15

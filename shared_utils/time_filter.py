@@ -87,3 +87,18 @@ class TimeFilterClient:
             return True
             
         return False
+
+def is_in_trading_session(start_str: str, end_str: str) -> bool:
+    """Checks if current local time is within the allowed trading session."""
+    try:
+        now = datetime.now().time()
+        start = datetime.strptime(start_str, "%H:%M").time()
+        end = datetime.strptime(end_str, "%H:%M").time()
+        
+        if start <= end:
+            return start <= now <= end
+        else: # Handles cross-midnight (e.g., 22:00 to 06:00)
+            return start <= now or now <= end
+    except Exception as e:
+        print(f"Time parsing error: {e}")
+        return True # Default to allow trading if error

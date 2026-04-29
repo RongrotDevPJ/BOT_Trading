@@ -198,3 +198,45 @@ def reset_global_stop():
     if STOP_FLAG_PATH.exists():
         os.remove(STOP_FLAG_PATH)
         logger.info("Global Stop Flag removed. Trading can resume.")
+
+# ── Trailing Daily Target ────────────────────────────────────────────────────
+class DailyTargetState:
+    _lock = threading.Lock()
+    peak_daily_equity = 0.0
+    daily_target_reached = False
+
+def check_trailing_daily_target(current_equity, target_equity, trailing_percent, symbol):
+    from shared_utils.notifier import send_telegram_message
+    
+    with DailyTargetState._lock:
+        if current_equity >= target_equity:
+            if not DailyTargetState.daily_target_reached:
+                DailyTargetState.daily_target_reached = True
+                msg = f"🎉 {symbol} DAILY TARGET REACHED! Equity {current_equity:.2f} >= {target_equity:.2f}. Let Profit Run activated."
+                logger.critical(msg)
+                send_telegram_message(msg)
+            
+            # Update peak equity
+            DailyTargetState.peak_daily_equity = max(DailyTargetState.peak_daily_equity, current_equity)
+            
+        # Check for trailing stop if target was hit
+        if DailyTargetState.daily_target_reached and DailyTargetState.peak_daily_equity > 0:
+            exit_equity = DailyTargetState.peak_daily_equity * (1 - (trailing_percent / 100.0))
+            if current_equity < exit_equity:
+                reason = f"Trailing Daily Target Hit! Peak: {DailyTargetState.peak_daily_equity:.2f}, Dropped below exit {exit_equity:.2f}"
+                trigger_emergency_close(reason=reason, trigger_bot=symbol)
+                msg = f"💰 <b>Trailing Daily Target Hit! ({symbol})</b>\nLocked Equity: ${current_equity:.2f}\nPeak Equity was: ${DailyTargetState.peak_daily_equity:.2f}"
+                logger.critical(msg)
+                send_telegram_message(msg)
+                
+                # Reset for safety (though trading is suspended)
+                DailyTargetState.daily_target_reached = False
+                DailyTargetState.peak_daily_equity = 0.0
+                return True
+                
+        return DailyTargetState.daily_target_reached
+
+def reset_daily_target_state():
+    with DailyTargetState._lock:
+        DailyTargetState.peak_daily_equity = 0.0
+        DailyTargetState.daily_target_reached = False

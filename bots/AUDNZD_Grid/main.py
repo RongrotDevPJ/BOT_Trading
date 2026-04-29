@@ -267,6 +267,8 @@ def main():
                         start_of_day_equity = account_info.equity
                         last_reset_day = trading_day
                         daily_target_reached = False
+                        from shared_utils.global_risk_manager import reset_daily_target_state
+                        reset_daily_target_state()
                         logger.info(f"--- DAILY RESET --- New trading day started. Starting Equity: {start_of_day_equity:.2f}")
                         
                         # Send Daily Summary to Telegram (Phase 4)
@@ -280,17 +282,15 @@ def main():
                             logger.error(f"Failed to archive old data: {e}")
 
                 # Check Daily Target
-                if getattr(config, 'ENABLE_DAILY_TARGET', False) and not daily_target_reached and start_of_day_equity is not None:
+                if getattr(config, 'ENABLE_DAILY_TARGET', False) and start_of_day_equity is not None:
                     account_info = client.get_account_info()
                     if account_info:
                         current_equity = account_info.equity
                         target_equity = start_of_day_equity * (1 + getattr(config, 'DAILY_TARGET_PERCENT', 15.0) / 100.0)
+                        trailing_pct = getattr(config, 'DAILY_TARGET_TRAILING_PERCENT', 2.0)
                         
-                        if current_equity >= target_equity:
-                            msg = f"🎉 {config.SYMBOL} DAILY TARGET REACHED! Equity {current_equity:.2f} >= {target_equity:.2f}. Entering Close-Only mode."
-                            logger.critical(msg)
-                            send_telegram_message(msg)
-                            daily_target_reached = True
+                        from shared_utils.global_risk_manager import check_trailing_daily_target
+                        daily_target_reached = check_trailing_daily_target(current_equity, target_equity, trailing_pct, config.SYMBOL)
                             
                 if daily_target_reached:
                     positions = strategy.get_positions()
