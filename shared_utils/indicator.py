@@ -208,6 +208,7 @@ class IndicatorClient:
             return cached[0]
 
         # --- fetch & compute ---
+        try:
             utc_now  = datetime.datetime.utcnow()
             utc_from = utc_now - datetime.timedelta(seconds=lookback_seconds)
 
@@ -252,7 +253,6 @@ class IndicatorClient:
                 f"Score={imbalance_score:+.3f}"
             )
             # Store in cache
-            import time as _time
             self._tick_imb_cache[symbol] = (imbalance_score, _time.time())
             return imbalance_score
 
