@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "SilentlyContinue"
 $Host.UI.RawUI.WindowTitle = "BOT_Trading Setup"
 
 function Write-Step  { param($msg) Write-Host "" ; Write-Host "[STEP] $msg" -ForegroundColor Cyan }
@@ -96,18 +96,21 @@ foreach ($bot in $BOTS) {
         continue
     }
 
-    # Remove old task silently (idempotent)
-    $schtasks = "$env:SystemRoot\System32\schtasks.exe"
-    & $schtasks /delete /tn $taskName /f 2>&1 | Out-Null
+    # Remove old task silently -- ignore error if task doesn't exist yet
+    $oldErr = $ErrorActionPreference
+    $ErrorActionPreference = "SilentlyContinue"
+    & "$env:SystemRoot\System32\schtasks.exe" /delete /tn $taskName /f 2>&1 | Out-Null
+    $ErrorActionPreference = $oldErr
 
     # Register using schtasks.exe (works on all Windows versions)
     $cmd = "`"" + $pyExe + "`" `"" + $mainScript + "`""
-    $out = & $schtasks /create /tn $taskName /tr $cmd /sc ONLOGON /rl HIGHEST /f 2>&1
+    $out = & "$env:SystemRoot\System32\schtasks.exe" /create /tn $taskName /tr $cmd /sc ONLOGON /rl HIGHEST /f 2>&1
+    $ec = $LASTEXITCODE
 
-    if ($LASTEXITCODE -eq 0) {
+    if ($ec -eq 0) {
         Write-OK "Task registered: $taskName"
     } else {
-        Write-WARN "Task may already exist or need Admin rights: $taskName"
+        Write-WARN "Failed to register $taskName. Run as Administrator."
     }
 }
 
@@ -118,16 +121,16 @@ Write-Step "6/6  Registering Weekly Analytics Report task (Sun 08:00)"
 $reportTask   = $TASK_PREFIX + "_WeeklyReport"
 $reportScript = Join-Path $ROOT "scripts\tools\weekly_report.py"
 
-$schtasks = "$env:SystemRoot\System32\schtasks.exe"
-& $schtasks /delete /tn $reportTask /f 2>&1 | Out-Null
+& "$env:SystemRoot\System32\schtasks.exe" /delete /tn $reportTask /f 2>&1 | Out-Null
 
 $rCmd = "`"" + $pyExe + "`" `"" + $reportScript + "`""
-$out2 = & $schtasks /create /tn $reportTask /tr $rCmd /sc WEEKLY /d SUN /st 08:00 /rl HIGHEST /f 2>&1
+$out2 = & "$env:SystemRoot\System32\schtasks.exe" /create /tn $reportTask /tr $rCmd /sc WEEKLY /d SUN /st 08:00 /rl HIGHEST /f 2>&1
+$ec2 = $LASTEXITCODE
 
-if ($LASTEXITCODE -eq 0) {
+if ($ec2 -eq 0) {
     Write-OK "Task registered: $reportTask"
 } else {
-    Write-WARN "Weekly report task registration issue -- check manually"
+    Write-WARN "Weekly report task failed. Run as Administrator."
 }
 
 # ═══════════════════════════════════════════════════════════════
