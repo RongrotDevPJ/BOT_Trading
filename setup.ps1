@@ -106,7 +106,7 @@ foreach ($bot in $BOTS) {
 
     # Register using schtasks.exe (works on all Windows versions)
     $cmd = "`"" + $pyExe + "`" `"" + $mainScript + "`""
-    $out = & "$env:SystemRoot\System32\schtasks.exe" /create /tn $taskName /tr $cmd /sc ONLOGON /ru $runAsUser /rl HIGHEST /f 2>&1
+    $out = & "$env:SystemRoot\System32\schtasks.exe" /create /tn $taskName /tr $cmd /sc ONLOGON /it /f 2>&1
     $ec = $LASTEXITCODE
 
     if ($ec -eq 0) {
@@ -126,7 +126,7 @@ $reportScript = Join-Path $ROOT "scripts\tools\weekly_report.py"
 & "$env:SystemRoot\System32\schtasks.exe" /delete /tn $reportTask /f 2>&1 | Out-Null
 
 $rCmd = "`"" + $pyExe + "`" `"" + $reportScript + "`""
-$out2 = & "$env:SystemRoot\System32\schtasks.exe" /create /tn $reportTask /tr $rCmd /sc WEEKLY /d SUN /st 08:00 /ru $runAsUser /rl HIGHEST /f 2>&1
+$out2 = & "$env:SystemRoot\System32\schtasks.exe" /create /tn $reportTask /tr $rCmd /sc WEEKLY /d SUN /st 08:00 /it /f 2>&1
 $ec2 = $LASTEXITCODE
 
 if ($ec2 -eq 0) {
