@@ -97,15 +97,12 @@ foreach ($bot in $BOTS) {
     }
 
     # Remove old task silently (idempotent)
-    schtasks /delete /tn $taskName /f 2>$null | Out-Null
+    $schtasks = "$env:SystemRoot\System32\schtasks.exe"
+    & $schtasks /delete /tn $taskName /f 2>&1 | Out-Null
 
     # Register using schtasks.exe (works on all Windows versions)
-    $cmd = '"' + $pyExe + '" "' + $mainScript + '"'
-    schtasks /create /tn $taskName `
-             /tr $cmd `
-             /sc ONLOGON `
-             /rl HIGHEST `
-             /f 2>&1 | Out-Null
+    $cmd = "`"" + $pyExe + "`" `"" + $mainScript + "`""
+    $out = & $schtasks /create /tn $taskName /tr $cmd /sc ONLOGON /rl HIGHEST /f 2>&1
 
     if ($LASTEXITCODE -eq 0) {
         Write-OK "Task registered: $taskName"
@@ -121,16 +118,11 @@ Write-Step "6/6  Registering Weekly Analytics Report task (Sun 08:00)"
 $reportTask   = $TASK_PREFIX + "_WeeklyReport"
 $reportScript = Join-Path $ROOT "scripts\tools\weekly_report.py"
 
-schtasks /delete /tn $reportTask /f 2>$null | Out-Null
+$schtasks = "$env:SystemRoot\System32\schtasks.exe"
+& $schtasks /delete /tn $reportTask /f 2>&1 | Out-Null
 
-$rCmd = '"' + $pyExe + '" "' + $reportScript + '"'
-schtasks /create /tn $reportTask `
-         /tr $rCmd `
-         /sc WEEKLY `
-         /d SUN `
-         /st 08:00 `
-         /rl HIGHEST `
-         /f 2>&1 | Out-Null
+$rCmd = "`"" + $pyExe + "`" `"" + $reportScript + "`""
+$out2 = & $schtasks /create /tn $reportTask /tr $rCmd /sc WEEKLY /d SUN /st 08:00 /rl HIGHEST /f 2>&1
 
 if ($LASTEXITCODE -eq 0) {
     Write-OK "Task registered: $reportTask"
@@ -147,8 +139,12 @@ Write-Host "  SETUP COMPLETE" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Magenta
 Write-Host ""
 Write-Host "Registered Scheduled Tasks:" -ForegroundColor White
-schtasks /query /fo LIST 2>$null | Select-String "BOT_Trading" | ForEach-Object {
-    Write-Host ("  - " + ($_ -replace "TaskName:\s*","")) -ForegroundColor Cyan
+$allTasks = & $schtasks /query /fo CSV 2>&1
+$allTasks | ForEach-Object {
+    if ($_ -like "*BOT_Trading*") {
+        $name = ($_ -split ',')[0] -replace '"',''
+        Write-Host ("  - " + $name) -ForegroundColor Cyan
+    }
 }
 Write-Host ""
 Write-Host "Next Steps:" -ForegroundColor White
