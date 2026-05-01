@@ -15,12 +15,12 @@ MIN_LOT = 0.01
 MIN_CYCLE_PROFIT_USC = 8.0  # Minimum profit in cents per grid cycle
 
 # --- Grid Scaling ---
-LOT_MULTIPLIER = 1.5         # Multiply lot size for each grid level
+LOT_MULTIPLIER = 1.3         # Reduced from 1.5 — AUDNZD range is narrow, less exposure needed
 MAX_GRID_LEVELS = 10         # Maximum number of grid levels allowed
 
 # --- Dynamic Grid Settings ---
-GRID_DISTANCE_POINTS = 250   # Base distance fallback
-MIN_GRID_DISTANCE_POINTS = 200 # Minimum distance for dynamic ATR grid
+GRID_DISTANCE_POINTS = 200   # Reduced from 250 — AUDNZD low volatility, tighter grid
+MIN_GRID_DISTANCE_POINTS = 150 # Reduced from 200 — allows faster averaging before reversion
 ENABLE_ATR_DISTANCE = True    # Enable ATR-based dynamic grid distance
 ATR_PERIOD = 14
 ATR_MULTIPLIER = 2.0
@@ -28,15 +28,15 @@ MAX_GAP_MULTIPLIER = 4.0     # Pause if gap > 4x grid distance
 
 # --- Phase 2 Upgrades (Grid Multiplier & Basket Trailing) ---
 GRID_DISTANCE_MULTIPLIER = 1.3
-BASKET_TRAILING_TRIGGER_USD = 10.0
+BASKET_TRAILING_TRIGGER_USD = 6.0   # Reduced from 10 — lock profits faster in slow AUDNZD
 BASKET_TRAILING_STEP_USD = 3.0
 
 # --- Indicators & Filters Setup ---
 import MetaTrader5 as ag
 TIMEFRAME = ag.TIMEFRAME_M5
 RSI_PERIOD = 14
-RSI_BUY_LEVEL = 35           # Buy trigger level
-RSI_SELL_LEVEL = 65          # Sell trigger level
+RSI_BUY_LEVEL = 30           # Tightened from 35 — wait for genuine oversold
+RSI_SELL_LEVEL = 70          # Tightened from 65 — reduce false signals in thin market
 
 # Trend Filter (EMA 200)
 ENABLE_TREND_FILTER = True
@@ -82,6 +82,10 @@ TRADING_HOURS_END = "06:00"    # End of Asian Session
 # --- Time Filter ---
 ALLOW_FRIDAY_TRADING = False
 FRIDAY_STOP_HOUR = 15
+
+# --- Break-Even Settings ---
+BE_ACTIVATION_POINTS = 300   # Activate BE after price moves 300pts in profit
+BE_LOCK_POINTS = 20          # Move SL to Entry + 20pts
 
 # MT5 Account Credentials (Placeholder - Loaded from .env in main.py)
 MT5_SERVER = ""

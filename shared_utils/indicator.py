@@ -5,6 +5,9 @@ import datetime
 class IndicatorClient:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+        # P1: TTL cache for tick imbalance — avoids fetching full tick dataset on every call
+        self._tick_imb_cache: dict = {}  # {symbol: (score, timestamp)}
+        self._tick_imb_ttl: float = 15.0  # seconds
 
     def _calculate_rsi(self, prices, period):
         """
@@ -195,18 +198,16 @@ class IndicatorClient:
     def get_tick_imbalance(self, symbol, lookback_seconds=60):
         """
         Phase 5 – Order Flow / Tick Imbalance Filter.
-
-        Fetches raw ticks for the past `lookback_seconds` and classifies each
-        tick as an up-tick (ask rose vs previous ask) or a down-tick (ask fell).
-        Returns a normalised imbalance score in the range [-1.0, +1.0]:
-            +1.0  → 100 % of ticks were up-ticks  (strong buying pressure)
-            -1.0  → 100 % of ticks were down-ticks (strong selling pressure)
-             0.0  → perfectly balanced
-
-        Returns None if there is insufficient tick data (e.g. market closed or
-        broker issue) so callers can degrade gracefully.
+        Results are cached for `_tick_imb_ttl` seconds to avoid fetching
+        hundreds of ticks on every loop iteration.
         """
-        try:
+        import time as _time
+        cached = self._tick_imb_cache.get(symbol)
+        if cached is not None and (_time.time() - cached[1]) < self._tick_imb_ttl:
+            self.logger.debug(f"[TickImbalance] {symbol} — returning cached score {cached[0]:+.3f}")
+            return cached[0]
+
+        # --- fetch & compute ---
             utc_now  = datetime.datetime.utcnow()
             utc_from = utc_now - datetime.timedelta(seconds=lookback_seconds)
 
@@ -250,6 +251,9 @@ class IndicatorClient:
                 f"Ticks={len(ticks)} | Up={up_ticks} | Down={down_ticks} | "
                 f"Score={imbalance_score:+.3f}"
             )
+            # Store in cache
+            import time as _time
+            self._tick_imb_cache[symbol] = (imbalance_score, _time.time())
             return imbalance_score
 
         except Exception as e:

@@ -88,10 +88,26 @@ class TimeFilterClient:
             
         return False
 
-def is_in_trading_session(start_str: str, end_str: str) -> bool:
-    """Checks if current local time is within the allowed trading session."""
+def get_utc_compensation() -> int:
+    """
+    Detects if running on a UTC VPS and returns the hour offset to apply.
+    If system clock offset from UTC < 60s → assume UTC VPS → return +7 (Thai broker GMT+7).
+    Otherwise returns 0 (local machine already has correct timezone).
+    """
+    from datetime import datetime as _dt
+    offset_seconds = (_dt.now() - _dt.utcnow()).total_seconds()
+    if abs(offset_seconds) < 60:
+        return 7  # UTC VPS → compensate +7h for Thai/GMT+7 broker time
+    return 0  # Local machine — no compensation needed
+
+def is_in_trading_session(start_str: str, end_str: str,
+                           utc_compensation_hours: int = 0) -> bool:
+    """Checks if current (compensated) time is within the allowed trading session.
+    Pass utc_compensation_hours=get_utc_compensation() when running on a UTC VPS.
+    """
     try:
-        now = datetime.now().time()
+        from datetime import timedelta
+        now = (datetime.now() + timedelta(hours=utc_compensation_hours)).time()
         start = datetime.strptime(start_str, "%H:%M").time()
         end = datetime.strptime(end_str, "%H:%M").time()
         

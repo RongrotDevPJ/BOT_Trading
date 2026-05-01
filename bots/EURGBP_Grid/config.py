@@ -12,15 +12,15 @@ BASE_EQUITY = 5000.0         # Milestone for scaling (5000 USC = $50)
 BASE_LOT = 0.10              # Lot per BASE_EQUITY
 MAX_LOT = 2.0                # Cap to prevent broker rejection
 MIN_LOT = 0.01
-MIN_CYCLE_PROFIT_USC = 8.0  # Minimum profit in cents per grid cycle
+MIN_CYCLE_PROFIT_USC = 10.0  # Increased from 8.0 to cover spread cost on EURGBP
 
 # --- Grid Scaling ---
 LOT_MULTIPLIER = 1.5         # Multiply lot size for each grid level
 MAX_GRID_LEVELS = 10         # Maximum number of grid levels allowed
 
 # --- Dynamic Grid Settings ---
-GRID_DISTANCE_POINTS = 250   # Base distance fallback
-MIN_GRID_DISTANCE_POINTS = 200 # Minimum distance for dynamic ATR grid
+GRID_DISTANCE_POINTS = 180   # Reduced from 250 — EURGBP has tightest range
+MIN_GRID_DISTANCE_POINTS = 130 # Reduced from 200 — faster averaging in slow market
 ENABLE_ATR_DISTANCE = True    # Enable ATR-based dynamic grid distance
 ATR_PERIOD = 14
 ATR_MULTIPLIER = 2.0
@@ -29,7 +29,7 @@ MAX_GAP_MULTIPLIER = 4.0     # Pause if gap > 4x grid distance
 # --- Phase 2 Upgrades (Grid Multiplier & Basket Trailing) ---
 GRID_DISTANCE_MULTIPLIER = 1.3
 BASKET_TRAILING_TRIGGER_USD = 10.0
-BASKET_TRAILING_STEP_USD = 3.0
+BASKET_TRAILING_STEP_USD = 2.0    # Reduced from 3.0 — tighter step for slow-moving pair
 
 # --- Indicators & Filters Setup ---
 import MetaTrader5 as ag
@@ -82,6 +82,10 @@ TRADING_HOURS_END = "06:00"    # End of Asian Session
 # --- Time Filter ---
 ALLOW_FRIDAY_TRADING = False
 FRIDAY_STOP_HOUR = 15
+
+# --- Break-Even Settings ---
+BE_ACTIVATION_POINTS = 300   # Activate BE after price moves 300pts in profit
+BE_LOCK_POINTS = 20          # Move SL to Entry + 20pts
 
 # MT5 Account Credentials (Placeholder - Loaded from .env in main.py)
 MT5_SERVER = ""

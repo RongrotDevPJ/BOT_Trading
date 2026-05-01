@@ -15,8 +15,8 @@ MIN_LOT = 0.01
 MIN_CYCLE_PROFIT_USC = 15.0  # Minimum profit in cents per grid cycle
 
 # --- Grid Scaling ---
-LOT_MULTIPLIER = 1.5         # Multiply lot size for each grid level
-MAX_GRID_LEVELS = 10         # Maximum number of grid levels allowed
+LOT_MULTIPLIER = 1.2         # Reduced from 1.5 — prevent exponential blowup on Gold
+MAX_GRID_LEVELS = 6          # Reduced from 10 — XAUUSD volatility makes deep grids lethal
 
 # --- Dynamic Grid Settings ---
 GRID_DISTANCE_POINTS = 300   # Base distance fallback
@@ -28,7 +28,7 @@ MAX_GAP_MULTIPLIER = 4.0     # Pause if gap > 4x grid distance
 
 # --- Phase 2 Upgrades (Grid Multiplier & Basket Trailing) ---
 GRID_DISTANCE_MULTIPLIER = 1.3
-BASKET_TRAILING_TRIGGER_USD = 30.0
+BASKET_TRAILING_TRIGGER_USD = 20.0  # Reduced from 30 — XAU reverses fast, lock profits sooner
 BASKET_TRAILING_STEP_USD = 6.0   # Quant-optimized: tighter step to lock profits sooner (was 15.0)
 
 # --- Indicators & Filters Setup ---
@@ -64,7 +64,7 @@ TRAILING_STOP_POINTS = 50
 TRAILING_STEP_POINTS = 10
 
 # --- Advanced Protections ---
-MAX_ALLOWED_SPREAD = 80
+MAX_ALLOWED_SPREAD = 150     # Increased from 80 — XAU spread spikes to 100-300 pts on news
 ENABLE_PARTIAL_CLOSE = True
 MIN_POSITIONS_FOR_PARTIAL = 5
 MAX_DD_PERCENT = 30.0        # Max drawdown before safety actions
@@ -72,8 +72,8 @@ ENABLE_HEDGE_ON_DD = True    # Auto-hedge if DD reached
 COOLDOWN_MINUTES = 15        # Minimum time between grid orders
 MAX_CONSECUTIVE_LOSSES = 3   # Circuit breaker: pause 1h after N losing cycles
 HEARTBEAT_INTERVAL_SEC = 300 # Log bot status every 5 mins
-ENABLE_DAILY_TARGET = False  # Set to True to enable daily profit target
-DAILY_TARGET_PERCENT = 15.0  # Stop trading for the day if equity grows by 15%
+ENABLE_DAILY_TARGET = True   # Lock profits when daily target hit
+DAILY_TARGET_PERCENT = 8.0   # Stop new entries after 8% daily gain
 DAILY_TARGET_TRAILING_PERCENT = 2.0  # Trailing distance from peak equity (%)
 # --- Session Filter ---
 ENABLE_SESSION_FILTER = False
@@ -82,6 +82,10 @@ TRADING_HOURS_END = "23:59"
 # --- Time Filter ---
 ALLOW_FRIDAY_TRADING = False
 FRIDAY_STOP_HOUR = 15
+
+# --- Break-Even Settings ---
+BE_ACTIVATION_POINTS = 500   # XAU noise is high — wider BE activation than FX pairs
+BE_LOCK_POINTS = 20          # Lock SL at Entry + 20pts after activation
 
 # MT5 Account Credentials (Placeholder - Loaded from .env in main.py)
 MT5_SERVER = ""

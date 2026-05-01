@@ -16,11 +16,11 @@ from shared_utils.indicator import IndicatorClient
 from shared_utils.db_manager import DBManager
 
 class SmartGridStrategy:
-    def __init__(self):
+    def __init__(self, db=None):
         self.logger = logging.getLogger("SmartGrid")
         self.csv_logger = CSVLogger(config.SYMBOL)
         self.indicator = IndicatorClient()  # Phase 5: Order Flow filter
-        self.db = DBManager()               # Phase 5: Kelly position sizing
+        self.db = db if db is not None else DBManager()  # Phase 5: Kelly position sizing
         self.hedged_this_session = False # Prevent multiple hedges in the same run
         self.last_dynamic_log_time = 0 # Prevent log spam
         self.last_trend_log_time = 0
@@ -170,8 +170,9 @@ class SmartGridStrategy:
         """Checks RSI, Stochastic, and EMA to determine if a first trade should be opened."""
         # --- SESSION FILTER ---
         if getattr(config, 'ENABLE_SESSION_FILTER', False):
-            from shared_utils.time_filter import is_in_trading_session
-            if not is_in_trading_session(config.TRADING_HOURS_START, config.TRADING_HOURS_END):
+            from shared_utils.time_filter import is_in_trading_session, get_utc_compensation
+            if not is_in_trading_session(config.TRADING_HOURS_START, config.TRADING_HOURS_END,
+                                          utc_compensation_hours=get_utc_compensation()):
                 return False # Block new entries outside allowed hours
 
         if current_rsi is None or tick is None or current_ema is None:
@@ -183,9 +184,10 @@ class SmartGridStrategy:
         # Phase 5: Consecutive Loss Cooldown Gate
         if time.time() < self.cooldown_until:
             remaining = int(self.cooldown_until - time.time())
-            if current_time - self.last_initial_log_time > 60:
+            _now = time.time()
+            if _now - self.last_initial_log_time > 60:
                 self.logger.warning(f"⏸️ [CircuitBreaker] Cooldown active for {config.SYMBOL}. New entries blocked for {remaining}s.")
-                self.last_initial_log_time = current_time
+                self.last_initial_log_time = _now
             return
 
         positions = self.get_positions()
@@ -421,14 +423,14 @@ class SmartGridStrategy:
         latest_position = max(positions, key=lambda p: p.time)
         
         # Cooldown check: prevent opening trades too quickly
-        symbol_info = ag.symbol_info(config.SYMBOL)
-        if symbol_info is not None:
-             current_time_sec = symbol_info.time
+        s_info = ag.symbol_info(config.SYMBOL)
+        if s_info is not None:
+             current_time_sec = s_info.time
              time_since_last_pos = current_time_sec - latest_position.time
              if time_since_last_pos < (config.COOLDOWN_MINUTES * 60):
                   return False
 
-        point = ag.symbol_info(config.SYMBOL).point
+        point = s_info.point if s_info else 0.00001
         distance_points = abs(current_price - latest_position.price_open) / point
         
         required_distance = self.get_dynamic_grid_distance(len(positions), current_atr)
@@ -483,6 +485,10 @@ class SmartGridStrategy:
         tick = ag.symbol_info_tick(config.SYMBOL)
         if tick is None:
             return # Probably weekend/market closed
+
+        s_info = ag.symbol_info(config.SYMBOL)
+        if s_info is None:
+            return
             
         if self.is_max_drawdown_reached(executor, tick):
              return # Skip processing if max DD hit (Hedging is handled inside)
@@ -504,7 +510,7 @@ class SmartGridStrategy:
                 result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_BUY, dynamic_lot, current_ask, atr_value=current_atr, rsi_value=None, grid_level=len(buy_positions)+1, cycle_id=cycle_id_val)
                 if result:
                     latest_p = max(buy_positions, key=lambda p: p.time)
-                    dist_moved = abs(current_ask - latest_p.price_open) / ag.symbol_info(config.SYMBOL).point
+                    dist_moved = abs(current_ask - latest_p.price_open) / s_info.point
                     req_dist = self.get_dynamic_grid_distance(len(buy_positions), current_atr)
                     self.csv_logger.log_event(action="Grid Open", side="BUY", price=current_ask, atr=current_atr, ema=current_ema, grid_level=len(buy_positions)+1, lot_size=dynamic_lot, distance_moved=dist_moved, required_distance=req_dist, ticket=result.order)
                 
@@ -527,7 +533,7 @@ class SmartGridStrategy:
                  result = executor.send_order(config.SYMBOL, ag.ORDER_TYPE_SELL, dynamic_lot, current_bid, atr_value=current_atr, rsi_value=None, grid_level=len(sell_positions)+1, cycle_id=cycle_id_val)
                  if result:
                      latest_p = max(sell_positions, key=lambda p: p.time)
-                     dist_moved = abs(current_bid - latest_p.price_open) / ag.symbol_info(config.SYMBOL).point
+                     dist_moved = abs(current_bid - latest_p.price_open) / s_info.point
                      req_dist = self.get_dynamic_grid_distance(len(sell_positions), current_atr)
                      self.csv_logger.log_event(action="Grid Open", side="SELL", price=current_bid, atr=current_atr, ema=current_ema, grid_level=len(sell_positions)+1, lot_size=dynamic_lot, distance_moved=dist_moved, required_distance=req_dist, ticket=result.order)
                  

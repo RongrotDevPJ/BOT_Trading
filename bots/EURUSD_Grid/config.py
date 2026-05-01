@@ -23,7 +23,7 @@ GRID_DISTANCE_POINTS = 300   # Base distance fallback
 MIN_GRID_DISTANCE_POINTS = 250 # Minimum distance for dynamic ATR grid
 ENABLE_ATR_DISTANCE = True    # Enable ATR-based dynamic grid distance
 ATR_PERIOD = 14
-ATR_MULTIPLIER = 2.0
+ATR_MULTIPLIER = 1.5
 MAX_GAP_MULTIPLIER = 4.0     # Pause if gap > 4x grid distance
 
 # --- Phase 2 Upgrades (Grid Multiplier & Basket Trailing) ---
@@ -35,7 +35,7 @@ BASKET_TRAILING_STEP_USD = 3.0
 import MetaTrader5 as ag
 TIMEFRAME = ag.TIMEFRAME_M5
 RSI_PERIOD = 14
-RSI_BUY_LEVEL = 35           # Buy trigger level
+RSI_BUY_LEVEL = 38           # Slightly looser than 35 — EURUSD has momentum, entry timing matters
 RSI_SELL_LEVEL = 65          # Sell trigger level
 
 # Trend Filter (EMA 200)
@@ -76,12 +76,16 @@ ENABLE_DAILY_TARGET = False  # Set to True to enable daily profit target
 DAILY_TARGET_PERCENT = 15.0  # Stop trading for the day if equity grows by 15%
 DAILY_TARGET_TRAILING_PERCENT = 2.0  # Trailing distance from peak equity (%)
 # --- Session Filter ---
-ENABLE_SESSION_FILTER = False
-TRADING_HOURS_START = "00:00"
-TRADING_HOURS_END = "23:59"
+ENABLE_SESSION_FILTER = True
+TRADING_HOURS_START = "07:00"  # London open
+TRADING_HOURS_END = "20:00"    # NY close
 # --- Time Filter ---
 ALLOW_FRIDAY_TRADING = False
 FRIDAY_STOP_HOUR = 15
+
+# --- Break-Even Settings ---
+BE_ACTIVATION_POINTS = 300   # Activate BE after price moves 300pts in profit
+BE_LOCK_POINTS = 20          # Move SL to Entry + 20pts
 
 # MT5 Account Credentials (Placeholder - Loaded from .env in main.py)
 MT5_SERVER = ""

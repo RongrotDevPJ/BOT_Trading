@@ -14,6 +14,7 @@ class NewsFilter:
         self.news_events = []
         self.last_update = datetime.min
         self.last_warning_time = 0
+        self._last_fetch_success = False  # P2: Track API health for fallback logic
         # IG.com API via DailyFX
         self.base_url = "https://api.ig.com/explore/events"
         self.headers = {
@@ -46,7 +47,7 @@ class NewsFilter:
             response = requests.get(self.base_url, headers=self.headers, params=params, timeout=15)
             if response.status_code != 200:
                 logger.error(f"Failed to fetch news from IG: Status {response.status_code}")
-                # Fallback or retry logic could go here
+                # P2: Don't update — keep stale cache. Caller will use fallback logic.
                 return
 
             data = response.json()
@@ -106,17 +107,26 @@ class NewsFilter:
 
             self.news_events = events
             self.last_update = datetime.now()
+            self._last_fetch_success = True  # P2: Mark API as healthy
             logger.info(f"News calendar updated via IG. Found {len(self.news_events)} high impact events.")
 
         except Exception as e:
             logger.error(f"Failed to update news calendar: {e}")
+            # P2: _last_fetch_success remains unchanged (stays False if first call failed)
 
     def is_safe_to_trade(self, symbol="XAUUSD"):
         """
         Determines if it is safe to trade based on upcoming news.
         Returns False if within the safety buffer of a high-impact event.
+        P2 Safety: If API has never succeeded AND cache is empty, returns False
+        (block trading) to avoid entering during unknown high-impact events.
         """
         self.update_news()
+
+        # P2: Fallback — if API failed on first-ever call and cache is empty, block trading
+        if not self._last_fetch_success and not self.news_events:
+            logger.warning("[NewsFilter] API unavailable and no cached events. Blocking trading as precaution.")
+            return False
         
         # Determine relevant currencies for this symbol
         relevant_currencies = []

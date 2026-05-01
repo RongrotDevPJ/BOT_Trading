@@ -6,10 +6,10 @@ from shared_utils.db_manager import DBManager
 import time
 
 class TradeExecutor:
-    def __init__(self, mt5_client):
+    def __init__(self, mt5_client, db=None):
         self.logger = logging.getLogger(__name__)
         self.mt5_client = mt5_client
-        self.db = DBManager()
+        self.db = db if db is not None else DBManager()
 
     def normalize_price(self, price, symbol):
         """Rounds price to the correct number of decimal places for the symbol."""
@@ -121,8 +121,10 @@ class TradeExecutor:
                 slippage = price - handled_result.price
                 
             info = ag.symbol_info(symbol)
+            current_spread = 0.0
             if info and info.point > 0:
-                slippage = round(slippage / info.point, 1) # Convert to Points
+                spread_pts = round((ag.symbol_info_tick(symbol).ask - ag.symbol_info_tick(symbol).bid) / info.point, 1) if ag.symbol_info_tick(symbol) else 0.0
+                current_spread = spread_pts
 
             self.db.log_open_trade(
                 ticket=handled_result.order,
@@ -136,7 +138,8 @@ class TradeExecutor:
                 cycle_id=cycle_id if cycle_id is not None else str(handled_result.order),
                 slippage=slippage,
                 exec_time_ms=exec_time_ms,
-                entry_signals=entry_signals
+                entry_signals=entry_signals,
+                spread_at_entry=current_spread
             )
         return handled_result
 
@@ -263,14 +266,32 @@ class TradeExecutor:
             return False
 
     def close_position(self, position, tick, strategy_instance=None, is_trailing_stop=False):
-        """Sends an inverse market order to close a single position and logs excursion data."""
+        """Sends an inverse market order to close a single position and logs full excursion analytics."""
         order_type = ag.ORDER_TYPE_SELL if position.type == 0 else ag.ORDER_TYPE_BUY
         price = tick.bid if order_type == ag.ORDER_TYPE_SELL else tick.ask
-        
-        # Capture excursion state if available
-        mae = getattr(strategy_instance, 'min_basket_pnl', 0.0) if strategy_instance else 0.0
-        mfe = getattr(strategy_instance, 'max_basket_mfe', 0.0) if strategy_instance else 0.0
-        
+
+        # --- Per-ticket MAE/MFE in points (individual position analytics) ---
+        mae_pts = 0.0
+        mfe_pts = 0.0
+        if strategy_instance and hasattr(strategy_instance, 'active_excursions'):
+            exc = strategy_instance.active_excursions.get(position.ticket, {})
+            mae_pts = exc.get('mae', 0.0)  # stored in points by main.py tracker
+            mfe_pts = exc.get('mfe', 0.0)
+
+        # --- Basket-level MAE/MFE in USD (for overall cycle analytics) ---
+        mae_usd = getattr(strategy_instance, 'min_basket_pnl', 0.0) if strategy_instance else 0.0
+        mfe_usd = getattr(strategy_instance, 'max_basket_mfe', 0.0) if strategy_instance else 0.0
+
+        # --- Hold time in seconds ---
+        hold_time_sec = 0
+        try:
+            open_time_unix = getattr(position, 'time', 0)  # MT5 position.time = Unix timestamp
+            if open_time_unix > 0:
+                import time as _t
+                hold_time_sec = int(_t.time() - open_time_unix)
+        except Exception:
+            pass
+
         request = {
             "action": ag.TRADE_ACTION_DEAL,
             "symbol": position.symbol,
@@ -292,18 +313,20 @@ class TradeExecutor:
         exec_time_ms = int((time.perf_counter() - start_time) * 1000)
         
         if result and result.retcode == ag.TRADE_RETCODE_DONE:
-            # Calculate final PnL for the alert
             pnl = position.profit + getattr(position, 'commission', 0.0) + position.swap
             icon = "✅" if pnl >= 0 else "❌"
-            send_telegram_message(f"{icon} <b>Trade Closed: {position.symbol}</b>\nTicket: {position.ticket}\nSide: {'BUY' if position.type == 0 else 'SELL'}\nProfit: ${pnl:.2f}")
-            
-            # Log final stats to DB
+            send_telegram_message(f"{icon} <b>Trade Closed: {position.symbol}</b>\nTicket: {position.ticket}\nSide: {'BUY' if position.type == 0 else 'SELL'}\nProfit: ${pnl:.2f} | Hold: {hold_time_sec//60}min")
+
+            # Log full analytics to DB
             self.db.log_closed_trade_update(
                 ticket=position.ticket,
                 close_price=result.price,
                 profit=pnl,
-                mae=mae,
-                mfe=mfe
+                mae=mae_usd,
+                mfe=mfe_usd,
+                mae_pts=mae_pts,
+                mfe_pts=mfe_pts,
+                hold_time_sec=hold_time_sec
             )
         
         return self._handle_retcode(result, request)
@@ -368,13 +391,13 @@ class TradeExecutor:
             if side == 0 and tick.bid >= basket_tp_price:
                 self.logger.critical(f"{emoji} GHOST TP TRIGGERED (BUY)! Target ${dynamic_target:.2f} USC reached. Bid {tick.bid:.5f} >= Target Price {basket_tp_price:.5f}. Securing profits!")
                 for p in side_positions:
-                    self.close_position(p, tick, strategy_instance=strategy_instance)
+                    self.close_position(p, tick, strategy_instance=strategy_instance, is_trailing_stop=True)
                     if strategy_instance and hasattr(strategy_instance, 'active_excursions'):
                         strategy_instance.active_excursions.pop(p.ticket, None)
             elif side == 1 and tick.ask <= basket_tp_price:
                 self.logger.critical(f"{emoji} GHOST TP TRIGGERED (SELL)! Target ${dynamic_target:.2f} USC reached. Ask {tick.ask:.5f} <= Target Price {basket_tp_price:.5f}. Securing profits!")
                 for p in side_positions:
-                    self.close_position(p, tick, strategy_instance=strategy_instance)
+                    self.close_position(p, tick, strategy_instance=strategy_instance, is_trailing_stop=True)
                     if strategy_instance and hasattr(strategy_instance, 'active_excursions'):
                         strategy_instance.active_excursions.pop(p.ticket, None)
 

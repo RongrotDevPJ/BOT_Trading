@@ -14,6 +14,7 @@ import datetime
 import config 
 
 from shared_utils.mt5_client import MT5Client
+from shared_utils.db_manager import DBManager
 from shared_utils.execution import TradeExecutor
 from shared_utils.indicator import IndicatorClient
 from shared_utils.time_filter import TimeFilterClient
@@ -48,8 +49,9 @@ def main():
     logger.info(f"CSV Logging initialized at: {project_root / 'Log_HistoryOrder' / 'Analytics_Data'}")
 
     client = MT5Client()
-    executor = TradeExecutor(client)
-    strategy = SmartGridStrategy()
+    shared_db = DBManager()  # P1: Single shared instance — reduces DB threads from 2 to 1 per bot
+    executor = TradeExecutor(client, db=shared_db)
+    strategy = SmartGridStrategy(db=shared_db)
     indicator_client = IndicatorClient()
     time_filter = TimeFilterClient()
     correlation_guard = CorrelationGuard()
@@ -366,7 +368,9 @@ def main():
                 executor.ghost_close_check(positions, tick, strategy)
                 executor.manage_partial_close(positions, tick)
                 # Apply Break-Even and Trailing Stop
-                executor.apply_break_even(config.SYMBOL, positions, tick, symbol_info, activation_points=300, lock_points=20)
+                executor.apply_break_even(config.SYMBOL, positions, tick, symbol_info,
+                                          activation_points=getattr(config, 'BE_ACTIVATION_POINTS', 300),
+                                          lock_points=getattr(config, 'BE_LOCK_POINTS', 20))
                 executor.apply_trailing_stop(config.SYMBOL, positions, tick, symbol_info, atr=current_atr)
 
             except Exception as e:
