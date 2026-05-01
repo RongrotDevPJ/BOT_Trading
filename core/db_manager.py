@@ -13,7 +13,7 @@ class DBManager:
         self.logger = logging.getLogger(__name__)
         current_dir = Path(__file__).resolve().parent
         project_root = current_dir.parent
-        self.db_dir = project_root / "Log_HistoryOrder"
+        self.db_dir = project_root / "data" / "db"
         self.db_dir.mkdir(parents=True, exist_ok=True)
         self.db_path = self.db_dir / "trading_data.db"
         

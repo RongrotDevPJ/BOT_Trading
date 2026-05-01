@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from contextlib import closing
 
 # ── Config ──────────────────────────────────────────────────────────────────
-DB_PATH = Path(__file__).resolve().parents[2] / "Log_HistoryOrder" / "trading_data.db"
+DB_PATH = Path(__file__).resolve().parents[2] / "data" / "db" / "trading_data.db"
 LOOKBACK_DAYS = 30
 SYMBOLS = ["AUDNZD", "EURGBP", "EURUSD", "XAUUSD"]
 
@@ -165,7 +165,7 @@ if __name__ == "__main__":
 
     # Send to Telegram
     try:
-        from shared_utils.telegram_notifier import send_telegram_message
+        from core.telegram_notifier import send_telegram_message
         send_telegram_message(report)
         print("\n[OK] Report sent to Telegram.")
     except Exception as e:

@@ -17,7 +17,7 @@ mock_config.USE_TRAILING_STOP = False
 mock_config.MAX_ALLOWED_SPREAD = 100
 sys.modules['config'] = mock_config
 
-from shared_utils.execution import TradeExecutor
+from core.execution import TradeExecutor
 
 class TestExecutionRetry(unittest.TestCase):
     def setUp(self):
@@ -26,7 +26,7 @@ class TestExecutionRetry(unittest.TestCase):
         # Mock DB to avoid actual database calls
         self.executor.db = MagicMock()
 
-    @patch('shared_utils.execution.ag')
+    @patch('core.execution.ag')
     def test_retry_on_requote_success(self, mock_ag):
         """Tests that the executor retries on REQUOTE and succeeds on the 3rd attempt."""
         # Setup error codes
@@ -71,7 +71,7 @@ class TestExecutionRetry(unittest.TestCase):
         self.assertEqual(result.order, 99999)
         print("SUCCESS: order_send called 3 times and eventually succeeded.")
 
-    @patch('shared_utils.execution.ag')
+    @patch('core.execution.ag')
     def test_fatal_rejection_breaks_loop(self, mock_ag):
         """Tests that a fatal rejection (NO_MONEY) breaks the retry loop immediately."""
         mock_ag.TRADE_RETCODE_NO_MONEY = 10019

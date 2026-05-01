@@ -49,7 +49,7 @@ try:
 
         # Test is_safe_to_trade via the actual module
         print("\n[TEST] Running is_safe_to_trade() for each symbol...")
-        from shared_utils.news_filter import is_safe_to_trade
+        from core.news_filter import is_safe_to_trade
         for sym in ["AUDNZD", "EURGBP", "EURUSD", "XAUUSD"]:
             result = is_safe_to_trade(sym)
             icon = "✅ SAFE" if result else "⚠️  BLOCKED (news)"

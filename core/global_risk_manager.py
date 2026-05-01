@@ -206,7 +206,7 @@ class DailyTargetState:
     daily_target_reached = False
 
 def check_trailing_daily_target(current_equity, target_equity, trailing_percent, symbol):
-    from shared_utils.notifier import send_telegram_message
+    from core.notifier import send_telegram_message
     
     with DailyTargetState._lock:
         if current_equity >= target_equity:

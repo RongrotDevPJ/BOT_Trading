@@ -11,7 +11,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
 # --- Configuration ---
 current_file = Path(__file__).resolve()
 project_root = current_file.parents[2]
-DATA_PATH = project_root / "Log_HistoryOrder" / "DB_Exports" / "trading_data_trades.csv"
+DATA_PATH = project_root / "data\db" / "DB_Exports" / "trading_data_trades.csv"
 
 # ─────────────────────────────────────────────
 # HELPER FUNCTIONS

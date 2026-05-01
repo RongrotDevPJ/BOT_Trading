@@ -6,8 +6,8 @@ function Write-OK    { param($msg) Write-Host "  [OK] $msg" -ForegroundColor Gre
 function Write-WARN  { param($msg) Write-Host "  [!!] $msg" -ForegroundColor Yellow }
 function Write-FAIL  { param($msg) Write-Host " [ERR] $msg" -ForegroundColor Red }
 
-$ROOT = Split-Path -Parent $MyInvocation.MyCommand.Path
-$BOTS = @("AUDNZD_Grid","EURGBP_Grid","EURUSD_Grid","XAUUSD_Grid")
+$ROOT = (Get-Item $MyInvocation.MyCommand.Path).Directory.Parent.Parent.FullName
+$BOTS = @("AUDNZD","EURGBP","EURUSD","XAUUSD")
 $TASK_PREFIX = "BOT_Trading"
 
 Write-Host "============================================================" -ForegroundColor Magenta
@@ -70,7 +70,7 @@ if ($envContent -match "MT5_LOGIN=0") {
 # STEP 4 — DB migration
 # ═══════════════════════════════════════════════════════════════
 Write-Step "4/6  Database schema migration"
-$migrateScript = "import sys; sys.path.insert(0, r'" + $ROOT + "'); from shared_utils.db_manager import DBManager; import time; DBManager(); time.sleep(1); print('DB migrated OK')"
+$migrateScript = "import sys; sys.path.insert(0, r'" + $ROOT + "'); from core.db_manager import DBManager; import time; DBManager(); time.sleep(1); print('DB migrated OK')"
 $result = python -c $migrateScript 2>&1
 if ($LASTEXITCODE -eq 0) {
     Write-OK $result
@@ -89,12 +89,8 @@ $startupFolder = [System.Environment]::GetFolderPath("Startup")
 Write-Host "  Startup folder: $startupFolder" -ForegroundColor Gray
 
 foreach ($bot in $BOTS) {
-    $botDir     = Join-Path $ROOT ("bots\" + $bot)
-    $mainScript = Join-Path $botDir "main.py"
-    $shortcutPath = Join-Path $startupFolder ($bot + ".lnk")
-
-    $symbol = $bot -replace "_Grid",""
-    $launcherScript = Join-Path $ROOT ("scripts\launchers\" + $symbol + "_BOT.bat")
+    $shortcutPath = Join-Path $startupFolder ("BOT_Trading_" + $bot + ".lnk")
+    $launcherScript = Join-Path $ROOT ("scripts\launchers\" + $bot + "_BOT.bat")
 
     if (-not (Test-Path $launcherScript)) {
         Write-WARN "Launcher not found for $bot -- skipping"
@@ -158,7 +154,7 @@ Write-Host "  SETUP COMPLETE" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Magenta
 Write-Host ""
 Write-Host "Registered Scheduled Tasks:" -ForegroundColor White
-$allTasks = & $schtasks /query /fo CSV 2>&1
+$allTasks = & schtasks /query /fo CSV 2>&1
 $allTasks | ForEach-Object {
     if ($_ -like "*BOT_Trading*") {
         $name = ($_ -split ',')[0] -replace '"',''
@@ -168,7 +164,7 @@ $allTasks | ForEach-Object {
 Write-Host ""
 Write-Host "Next Steps:" -ForegroundColor White
 Write-Host "  1. Verify .env has correct MT5 + Telegram credentials"
-Write-Host "  2. Start bots NOW: double-click scripts\UNIVERSAL_START.ps1"
+Write-Host "  2. Start bots NOW: double-click scripts\START_ALL_VPS.bat"
 Write-Host "  3. Bots will AUTO-START on next Windows Login/Reboot"
 Write-Host "  4. Weekly report sent to Telegram every Sunday 08:00"
 Write-Host ""

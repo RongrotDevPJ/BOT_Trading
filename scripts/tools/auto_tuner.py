@@ -65,8 +65,8 @@ _PROJECT_ROOT = _SCRIPT_DIR.parents[1]                   # BOT_Trading/
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from shared_utils.db_manager import DBManager
-from shared_utils.notifier   import send_telegram_message
+from core.db_manager import DBManager
+from core.notifier   import send_telegram_message
 
 # ──────────────────────────────────────────────────────────────────────────────
 # LOGGING

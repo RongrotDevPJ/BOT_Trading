@@ -34,7 +34,7 @@ sys.modules['MetaTrader5'] = mock_ag
 sys.modules['config'] = mock_config
 
 import bots.XAUUSD_Grid.config as bot_config
-from shared_utils.execution import TradeExecutor
+from core.execution import TradeExecutor
 from bots.XAUUSD_Grid.strategy import SmartGridStrategy
 
 def test_atr_trailing_stop():

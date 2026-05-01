@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 import threading
 import MetaTrader5 as mt5
-from shared_utils.db_manager import DBManager
+from core.db_manager import DBManager
 
 class CSVLogger:
     _lock = threading.Lock()
@@ -15,7 +15,7 @@ class CSVLogger:
         from pathlib import Path
         current_dir = Path(__file__).resolve().parent
         project_root = current_dir.parent
-        self.log_dir = project_root / "Log_HistoryOrder" / "Analytics_Data"
+        self.log_dir = project_root / "data" / "logs"
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.filepath = self.log_dir / f"{self.symbol}_Analytics.csv"
         self.db_manager = DBManager()

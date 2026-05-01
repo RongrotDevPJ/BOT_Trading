@@ -4,16 +4,16 @@ import logging
 import time
 import MetaTrader5 as ag
 import config
-# Add project root to path for shared_utils
-project_root = Path(__file__).resolve().parent.parent.parent
+# Add project root to path
+project_root = Path(__file__).resolve().parent.parent
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
-from shared_utils.csv_logger import CSVLogger
-from shared_utils.news_filter import is_safe_to_trade
-from shared_utils.notifier import send_telegram_message
-from shared_utils.indicator import IndicatorClient
-from shared_utils.db_manager import DBManager
+from core.csv_logger import CSVLogger
+from core.news_filter import is_safe_to_trade
+from core.notifier import send_telegram_message
+from core.indicator import IndicatorClient
+from core.db_manager import DBManager
 
 class SmartGridStrategy:
     def __init__(self, db=None):
@@ -38,9 +38,9 @@ class SmartGridStrategy:
         self.initial_signals = ""         # Stored signals of the first entry
 
         # Phase 5: Consecutive Loss Circuit Breaker
-        self.consecutive_losses = 0
-        self.cooldown_until = 0.0
-        self._had_active_cycle = False
+        self.consecutive_losses = 0     # Count of sequential losing cycles
+        self.cooldown_until = 0.0       # Timestamp until which new entries are blocked
+        self._had_active_cycle = False  # True once positions were open this cycle
 
     def is_max_drawdown_reached(self, executor, tick):
          """Checks if current account drawdown exceeds the max limit and performs Hedging if enabled."""
@@ -170,7 +170,7 @@ class SmartGridStrategy:
         """Checks RSI, Stochastic, and EMA to determine if a first trade should be opened."""
         # --- SESSION FILTER ---
         if getattr(config, 'ENABLE_SESSION_FILTER', False):
-            from shared_utils.time_filter import is_in_trading_session, get_utc_compensation
+            from core.time_filter import is_in_trading_session, get_utc_compensation
             if not is_in_trading_session(config.TRADING_HOURS_START, config.TRADING_HOURS_END,
                                           utc_compensation_hours=get_utc_compensation()):
                 return False # Block new entries outside allowed hours
@@ -335,13 +335,13 @@ class SmartGridStrategy:
             Kelly%  = W - ((1 - W) / R)
             Adj%    = Kelly% * KELLY_FRACTION          # e.g. 0.25 = "quarter Kelly"
             Adj%    = min(Adj%, KELLY_MAX_FRACTION)    # hard cap for safety
-            lot_raw = (current_equity * Adj%) / (BASE_EQUITY / BASE_LOT)
+            lot_raw = current_equity * Adj% * (BASE_LOT / BASE_EQUITY)
         """
         if not getattr(config, 'AUTO_LOT', False):
             return config.DEFAULT_LOT
 
-        kelly_fraction    = getattr(config, 'KELLY_FRACTION',    0.25)
-        kelly_min_trades  = getattr(config, 'KELLY_MIN_TRADES',  10)
+        kelly_fraction     = getattr(config, 'KELLY_FRACTION',     0.25)
+        kelly_min_trades   = getattr(config, 'KELLY_MIN_TRADES',   10)
         kelly_max_fraction = getattr(config, 'KELLY_MAX_FRACTION', 0.20)
 
         # --- Pull 30-day stats from DB ---
@@ -552,24 +552,27 @@ class SmartGridStrategy:
         """
         positions = self.get_positions()
         if not positions:
+            # Cycle ended externally (SL, ghost TP, manual close)
+            # If trailing was NEVER activated, the cycle never profited = potential loss
             if self._had_active_cycle and self.max_basket_pnl == -1000000.0:
                 self.consecutive_losses += 1
                 self.logger.warning(f"⚠️ [CircuitBreaker] Cycle on {config.SYMBOL} ended without profit peak. Consecutive losses: {self.consecutive_losses}")
                 max_losses = getattr(config, 'MAX_CONSECUTIVE_LOSSES', 3)
                 if self.consecutive_losses >= max_losses:
                     msg = (f"🚨 CIRCUIT BREAKER TRIGGERED on {config.SYMBOL}! "
-                           f"{max_losses} consecutive losing cycles. Entering 1-hour cooldown.")
+                           f"{max_losses} consecutive losing cycles detected. "
+                           f"Entering 1-hour cooldown.")
                     self.logger.critical(msg)
                     send_telegram_message(msg)
                     self.cooldown_until = time.time() + 3600
                     self.consecutive_losses = 0
             self._had_active_cycle = False
-            self.max_basket_pnl = -1000000.0
-            self.min_basket_pnl = 1000000.0
-            self.max_basket_mfe = -1000000.0
+            self.max_basket_pnl = -1000000.0 # Reset trailing trigger
+            self.min_basket_pnl = 1000000.0  # Reset MAE
+            self.max_basket_mfe = -1000000.0 # Reset MFE
             return
 
-        self._had_active_cycle = True
+        self._had_active_cycle = True  # Positions exist: cycle is active
 
         # 1. Calculate Dynamic Profit Target (Trigger)
         oldest_pos = min(positions, key=lambda p: p.time)
@@ -620,6 +623,7 @@ class SmartGridStrategy:
                 for p in positions:
                     executor.close_position(p, tick, is_trailing_stop=True)
                     self.active_excursions.pop(p.ticket, None)
+                # Phase 5: Evaluate cycle result for Circuit Breaker
                 max_losses = getattr(config, 'MAX_CONSECUTIVE_LOSSES', 3)
                 if total_pnl <= 0:
                     self.consecutive_losses += 1
@@ -633,10 +637,10 @@ class SmartGridStrategy:
                         self.consecutive_losses = 0
                 else:
                     if self.consecutive_losses > 0:
-                        self.logger.info(f"✅ [CircuitBreaker] Winning cycle on {config.SYMBOL}. Counter reset.")
+                        self.logger.info(f"✅ [CircuitBreaker] Winning cycle on {config.SYMBOL}. Consecutive loss counter reset.")
                     self.consecutive_losses = 0
                 self._had_active_cycle = False
-                self.max_basket_pnl = -1000000.0
+                self.max_basket_pnl = -1000000.0 # Reset after hitting
              
     def _update_tps_if_needed(self, executor, positions, new_tp):
          """Helper to iterate and modify TPs only if they differ significantly."""

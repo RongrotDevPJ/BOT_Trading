@@ -6,7 +6,7 @@ try:
 except ImportError:
     psutil = None
 import config
-from shared_utils.db_manager import DBManager
+from core.db_manager import DBManager
 
 def get_system_stats():
     # Return stats using global psutil

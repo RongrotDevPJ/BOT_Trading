@@ -5,7 +5,7 @@ function Write-OK   { param($msg) Write-Host "  [OK] $msg" -ForegroundColor Gree
 function Write-WARN { param($msg) Write-Host "  [!!] $msg" -ForegroundColor Yellow }
 
 $TASK_PREFIX = "BOT_Trading"
-$botMains = @("AUDNZD_Grid\main.py","EURGBP_Grid\main.py","EURUSD_Grid\main.py","XAUUSD_Grid\main.py")
+$botMains = @("configs\AUDNZD.py","configs\EURGBP.py","configs\EURUSD.py","configs\XAUUSD.py")
 
 Write-Host "============================================================" -ForegroundColor Magenta
 Write-Host "   BOT_Trading  --  Uninstall" -ForegroundColor Magenta

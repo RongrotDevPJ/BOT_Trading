@@ -7,8 +7,8 @@ current_file = Path(__file__).resolve()
 project_root = current_file.parents[2] 
 sys.path.insert(0, str(project_root))
 
-from shared_utils.db_manager import DBManager
-from shared_utils.csv_logger import CSVLogger
+from core.db_manager import DBManager
+from core.csv_logger import CSVLogger
 import sqlite3
 
 def verify():

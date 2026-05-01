@@ -1,30 +1,44 @@
 import sys
 from pathlib import Path
 
-# Add project root to path for shared_utils and strategy imports
-# Structure: [Root]/BOT_XXXXX/Smart Grid/main.py (3 levels deep from root)
+# Add project root to path
 current_file = Path(__file__).resolve()
-project_root = current_file.parents[2] 
+project_root = current_file.parents[1] 
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 import logging
 import time
 import datetime
-import config 
+import importlib.util
 
-from shared_utils.mt5_client import MT5Client
-from shared_utils.db_manager import DBManager
-from shared_utils.execution import TradeExecutor
-from shared_utils.indicator import IndicatorClient
-from shared_utils.time_filter import TimeFilterClient
-from shared_utils.display_manager import render_dashboard
-from strategy import SmartGridStrategy
-from shared_utils.global_risk_manager import is_trading_suspended, check_margin_level, MarginStatus
-from shared_utils.notifier import send_telegram_message
-from shared_utils.news_filter import is_safe_to_trade as is_news_safe
-from shared_utils.system_logger import setup_logger
-from shared_utils.correlation_manager import CorrelationGuard
+# Dynamically load config from command line arguments
+if len(sys.argv) > 2 and sys.argv[1] == '--config':
+    config_path = Path(sys.argv[2]).resolve()
+    if not config_path.exists():
+        print(f"Config file not found: {config_path}")
+        sys.exit(1)
+        
+    spec = importlib.util.spec_from_file_location("config", config_path)
+    config = importlib.util.module_from_spec(spec)
+    sys.modules["config"] = config
+    spec.loader.exec_module(config)
+else:
+    print("Usage: python engine.py --config path/to/config.py")
+    sys.exit(1)
+
+from core.mt5_client import MT5Client
+from core.db_manager import DBManager
+from core.execution import TradeExecutor
+from core.indicator import IndicatorClient
+from core.time_filter import TimeFilterClient
+from core.display_manager import render_dashboard
+from core.strategy import SmartGridStrategy
+from core.global_risk_manager import is_trading_suspended, check_margin_level, MarginStatus, trigger_emergency_close, reset_daily_target_state, check_trailing_daily_target
+from core.notifier import send_telegram_message
+from core.news_filter import is_safe_to_trade as is_news_safe
+from core.system_logger import setup_logger
+from core.correlation_manager import CorrelationGuard
 
 # Setup Persistent Logging
 logger = setup_logger(f"{config.SYMBOL}_Bot")
@@ -127,7 +141,6 @@ def main():
                 # Check Global Hard Kill Switch
                 if current_dd > max_dd_limit:
                     reason = f"Account Drawdown hit {current_dd:.2f}% (Limit: {max_dd_limit}%)"
-                    from shared_utils.global_risk_manager import trigger_emergency_close
                     trigger_emergency_close(reason=reason, trigger_bot=config.SYMBOL)
                     send_telegram_message(f"🚨 <b>CRITICAL: Global Kill Switch Triggered by {config.SYMBOL}!</b>\n{reason}. All positions closed.")
                     logger.critical(f"Global Kill Switch activated by {config.SYMBOL}! Trading stopped. Reason: {reason}")
@@ -147,6 +160,7 @@ def main():
                     if current_time - last_ui_data_update >= 60:
                         logger.warning("⚠️ [MarginGuard] Margin SOFT STOP active. Blocking new initial entries.")
                 elif margin_status == MarginStatus.EMERGENCY:
+                    # Emergency close was triggered inside check_margin_level(); skip this tick.
                     continue
 
             mt5_status = "CONNECTED" if client.is_connected() else "DISCONNECTED"
@@ -268,7 +282,6 @@ def main():
                         start_of_day_equity = account_info.equity
                         last_reset_day = trading_day
                         daily_target_reached = False
-                        from shared_utils.global_risk_manager import reset_daily_target_state
                         reset_daily_target_state()
                         logger.info(f"--- DAILY RESET --- New trading day started. Starting Equity: {start_of_day_equity:.2f}")
                         
@@ -290,7 +303,6 @@ def main():
                         target_equity = start_of_day_equity * (1 + getattr(config, 'DAILY_TARGET_PERCENT', 15.0) / 100.0)
                         trailing_pct = getattr(config, 'DAILY_TARGET_TRAILING_PERCENT', 2.0)
                         
-                        from shared_utils.global_risk_manager import check_trailing_daily_target
                         daily_target_reached = check_trailing_daily_target(current_equity, target_equity, trailing_pct, config.SYMBOL)
                             
                 if daily_target_reached:

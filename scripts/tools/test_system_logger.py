@@ -7,7 +7,7 @@ project_root = Path(__file__).resolve().parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
-from shared_utils.system_logger import setup_logger
+from core.system_logger import setup_logger
 
 def test_system_logger():
     bot_name = "TEST_BOT"

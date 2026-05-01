@@ -1,6 +1,6 @@
 $ErrorActionPreference = "SilentlyContinue"
 $Host.UI.RawUI.WindowTitle = "BOT_Trading Stop All"
-$botMains = @("AUDNZD_Grid\main.py","EURGBP_Grid\main.py","EURUSD_Grid\main.py","XAUUSD_Grid\main.py")
+$botMains = @("configs\AUDNZD.py","configs\EURGBP.py","configs\EURUSD.py","configs\XAUUSD.py")
 
 Write-Host ""
 Write-Host "[BOT_Trading] Stopping all bot processes..." -ForegroundColor Yellow

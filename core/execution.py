@@ -1,8 +1,8 @@
 import logging
 import MetaTrader5 as ag
 import config
-from shared_utils.notifier import send_telegram_message
-from shared_utils.db_manager import DBManager
+from core.notifier import send_telegram_message
+from core.db_manager import DBManager
 import time
 
 class TradeExecutor:

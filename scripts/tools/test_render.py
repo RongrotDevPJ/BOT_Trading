@@ -8,7 +8,7 @@ project_root = Path(__file__).resolve().parents[2]
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
-from shared_utils.display_manager import render_dashboard
+from core.display_manager import render_dashboard
 
 print("Testing Dashboard Throttling and ANSI Escape codes...")
 for i in range(10):
