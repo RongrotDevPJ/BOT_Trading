@@ -93,20 +93,22 @@ foreach ($bot in $BOTS) {
     $mainScript = Join-Path $botDir "main.py"
     $shortcutPath = Join-Path $startupFolder ($bot + ".lnk")
 
-    if (-not (Test-Path $mainScript)) {
-        Write-WARN "main.py not found for $bot -- skipping"
+    $symbol = $bot -replace "_Grid",""
+    $launcherScript = Join-Path $ROOT ("scripts\launchers\" + $symbol + "_BOT.bat")
+
+    if (-not (Test-Path $launcherScript)) {
+        Write-WARN "Launcher not found for $bot -- skipping"
         continue
     }
 
     # Remove old shortcut
     if (Test-Path $shortcutPath) { Remove-Item $shortcutPath -Force }
 
-    # Create shortcut via WScript.Shell (PS 2.0 compatible, no password needed)
+    # Create shortcut to the .bat launcher
     $shell = New-Object -ComObject WScript.Shell
     $sc    = $shell.CreateShortcut($shortcutPath)
-    $sc.TargetPath       = $pyExe
-    $sc.Arguments        = "`"$mainScript`""
-    $sc.WorkingDirectory = $botDir
+    $sc.TargetPath       = $launcherScript
+    $sc.WorkingDirectory = Join-Path $ROOT "scripts\launchers"
     $sc.WindowStyle      = 1
     $sc.Description      = "BOT_Trading $bot auto-start"
     $sc.Save()
