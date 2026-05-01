@@ -81,58 +81,70 @@ if ($LASTEXITCODE -eq 0) {
 }
 
 # ═══════════════════════════════════════════════════════════════
-# STEP 5 — Register bot Scheduled Tasks
+# STEP 5 — Add bots to Windows Startup Folder (no password needed)
 # ═══════════════════════════════════════════════════════════════
-Write-Step "5/6  Registering bot Scheduled Tasks (auto-start on login)"
+Write-Step "5/6  Adding bots to Startup Folder (auto-start on login)"
 $pyExe = $pyCmd.Source
-$runAsUser = $env:USERDOMAIN + "\" + $env:USERNAME
-Write-Host "  Running tasks as user: $runAsUser" -ForegroundColor Gray
+$startupFolder = [System.Environment]::GetFolderPath("Startup")
+Write-Host "  Startup folder: $startupFolder" -ForegroundColor Gray
 
 foreach ($bot in $BOTS) {
-    $taskName   = $TASK_PREFIX + "_" + $bot
     $botDir     = Join-Path $ROOT ("bots\" + $bot)
     $mainScript = Join-Path $botDir "main.py"
+    $shortcutPath = Join-Path $startupFolder ($bot + ".lnk")
 
     if (-not (Test-Path $mainScript)) {
         Write-WARN "main.py not found for $bot -- skipping"
         continue
     }
 
-    # Remove old task silently -- ignore error if task doesn't exist yet
-    $oldErr = $ErrorActionPreference
-    $ErrorActionPreference = "SilentlyContinue"
-    & "$env:SystemRoot\System32\schtasks.exe" /delete /tn $taskName /f 2>&1 | Out-Null
-    $ErrorActionPreference = $oldErr
+    # Remove old shortcut
+    if (Test-Path $shortcutPath) { Remove-Item $shortcutPath -Force }
 
-    # Register using schtasks.exe (works on all Windows versions)
-    $cmd = "`"" + $pyExe + "`" `"" + $mainScript + "`""
-    $out = & "$env:SystemRoot\System32\schtasks.exe" /create /tn $taskName /tr $cmd /sc ONLOGON /it /f 2>&1
-    $ec = $LASTEXITCODE
+    # Create shortcut via WScript.Shell (PS 2.0 compatible, no password needed)
+    $shell = New-Object -ComObject WScript.Shell
+    $sc    = $shell.CreateShortcut($shortcutPath)
+    $sc.TargetPath       = $pyExe
+    $sc.Arguments        = "`"$mainScript`""
+    $sc.WorkingDirectory = $botDir
+    $sc.WindowStyle      = 1
+    $sc.Description      = "BOT_Trading $bot auto-start"
+    $sc.Save()
 
-    if ($ec -eq 0) {
-        Write-OK "Task registered: $taskName"
+    if (Test-Path $shortcutPath) {
+        Write-OK "Startup shortcut created: $bot"
     } else {
-        Write-WARN "Failed to register $taskName. Run as Administrator."
+        Write-WARN "Failed to create shortcut for $bot"
     }
 }
 
 # ═══════════════════════════════════════════════════════════════
-# STEP 6 — Register Weekly Report task
+# STEP 6 — Register Weekly Report via schtasks (time-based, OK without ONLOGON)
 # ═══════════════════════════════════════════════════════════════
 Write-Step "6/6  Registering Weekly Analytics Report task (Sun 08:00)"
 $reportTask   = $TASK_PREFIX + "_WeeklyReport"
 $reportScript = Join-Path $ROOT "scripts\tools\weekly_report.py"
 
 & "$env:SystemRoot\System32\schtasks.exe" /delete /tn $reportTask /f 2>&1 | Out-Null
-
 $rCmd = "`"" + $pyExe + "`" `"" + $reportScript + "`""
-$out2 = & "$env:SystemRoot\System32\schtasks.exe" /create /tn $reportTask /tr $rCmd /sc WEEKLY /d SUN /st 08:00 /it /f 2>&1
-$ec2 = $LASTEXITCODE
+$out2 = & "$env:SystemRoot\System32\schtasks.exe" /create /tn $reportTask /tr $rCmd /sc WEEKLY /d SUN /st 08:00 /ru SYSTEM /f 2>&1
+$ec2  = $LASTEXITCODE
 
 if ($ec2 -eq 0) {
-    Write-OK "Task registered: $reportTask"
+    Write-OK "Task registered: $reportTask (runs as SYSTEM every Sunday 08:00)"
 } else {
-    Write-WARN "Weekly report task failed. Run as Administrator."
+    # Fallback: add to startup folder as well
+    Write-WARN "schtasks failed ($out2) -- adding weekly report to Startup folder as fallback"
+    $shortcutPath2 = Join-Path $startupFolder "BOT_WeeklyReport.lnk"
+    if (Test-Path $shortcutPath2) { Remove-Item $shortcutPath2 -Force }
+    $shell2 = New-Object -ComObject WScript.Shell
+    $sc2    = $shell2.CreateShortcut($shortcutPath2)
+    $sc2.TargetPath       = $pyExe
+    $sc2.Arguments        = "`"$reportScript`""
+    $sc2.WorkingDirectory = $ROOT
+    $sc2.WindowStyle      = 1
+    $sc2.Save()
+    if (Test-Path $shortcutPath2) { Write-OK "Weekly report added to Startup folder" }
 }
 
 # ═══════════════════════════════════════════════════════════════
