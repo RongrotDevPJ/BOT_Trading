@@ -51,6 +51,7 @@ Thumbs.db
 *.db
 *.sqlite3
 Log_HistoryOrder/
+data/
 
 # --- AI & Context Files (Project Specific) ---
 ALL_CONTEXT_FOR_GEMINI.txt
