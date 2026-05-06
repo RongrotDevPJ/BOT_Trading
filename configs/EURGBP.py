@@ -53,7 +53,7 @@ TICK_IMBALANCE_LOOKBACK_SEC = 60  # Rolling window of ticks to evaluate
 # --- Phase 5: Fractional Kelly Criterion Position Sizing ---
 # Kelly % = W - ((1 - W) / R)  where W = Win Rate, R = Risk/Reward Ratio
 # Final lot = (equity * Kelly% * KELLY_FRACTION) / (BASE_EQUITY / BASE_LOT)
-KELLY_FRACTION  = 0.25   # Safety multiplier ("quarter Kelly"); range 0.1–0.5
+KELLY_FRACTION  = 0.35   # Increased from 0.25: higher profitability for low-volatility FX pair
 KELLY_MIN_TRADES = 10    # Min closed trades required; below this, fallback to DEFAULT_LOT
 KELLY_MAX_FRACTION = 0.20  # Hard cap: never risk more than 20% of equity on Kelly signal
 

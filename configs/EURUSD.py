@@ -12,15 +12,15 @@ BASE_EQUITY = 5000.0         # Milestone for scaling (5000 USC = $50)
 BASE_LOT = 0.10              # Lot per BASE_EQUITY
 MAX_LOT = 2.0                # Cap to prevent broker rejection
 MIN_LOT = 0.01
-MIN_CYCLE_PROFIT_USC = 15.0  # Minimum profit in cents per grid cycle
+MIN_CYCLE_PROFIT_USC = 12.0  # Reduced from 15.0: close cycles faster on slower FX pair
 
 # --- Grid Scaling ---
 LOT_MULTIPLIER = 1.5         # Multiply lot size for each grid level
 MAX_GRID_LEVELS = 10         # Maximum number of grid levels allowed
 
 # --- Dynamic Grid Settings ---
-GRID_DISTANCE_POINTS = 300   # Base distance fallback
-MIN_GRID_DISTANCE_POINTS = 250 # Minimum distance for dynamic ATR grid
+GRID_DISTANCE_POINTS = 200   # Reduced from 300: tighter grid for FX
+MIN_GRID_DISTANCE_POINTS = 150 # Reduced from 250: average price down quicker
 ENABLE_ATR_DISTANCE = True    # Enable ATR-based dynamic grid distance
 ATR_PERIOD = 14
 ATR_MULTIPLIER = 1.5
@@ -53,7 +53,7 @@ TICK_IMBALANCE_LOOKBACK_SEC = 60  # Rolling window of ticks to evaluate
 # --- Phase 5: Fractional Kelly Criterion Position Sizing ---
 # Kelly % = W - ((1 - W) / R)  where W = Win Rate, R = Risk/Reward Ratio
 # Final lot = (equity * Kelly% * KELLY_FRACTION) / (BASE_EQUITY / BASE_LOT)
-KELLY_FRACTION  = 0.25   # Safety multiplier ("quarter Kelly"); range 0.1–0.5
+KELLY_FRACTION  = 0.35   # Increased from 0.25: higher profitability for low-volatility FX pair
 KELLY_MIN_TRADES = 10    # Min closed trades required; below this, fallback to DEFAULT_LOT
 KELLY_MAX_FRACTION = 0.20  # Hard cap: never risk more than 20% of equity on Kelly signal
 
