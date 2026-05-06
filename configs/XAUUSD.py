@@ -73,14 +73,19 @@ COOLDOWN_MINUTES = 30        # Increased from 15 → 30 min: prevents rapid grid
 MAX_CONSECUTIVE_LOSSES = 3   # Circuit breaker: pause 1h after N losing cycles
 HEARTBEAT_INTERVAL_SEC = 300 # Log bot status every 5 mins
 ENABLE_DAILY_TARGET = True   # Lock profits when daily target hit
-DAILY_TARGET_PERCENT = 8.0   # Stop new entries after 8% daily gain
-DAILY_TARGET_TRAILING_PERCENT = 2.0  # Trailing distance from peak equity (%)
+DAILY_TARGET_PERCENT = 5.0    # Reduced: XAUUSD hits 3.5% in 1 day easily ? lock faster   # Stop new entries after 8% daily gain
+DAILY_TARGET_TRAILING_PERCENT = 1.5  # Trailing distance from peak equity (%)
 # --- Session Filter ---
 ENABLE_SESSION_FILTER = False
 TRADING_HOURS_START = "00:00"
 TRADING_HOURS_END = "23:59"
 # --- Time Filter ---
 ALLOW_FRIDAY_TRADING = False
+# --- Daily Loss Limit (Floating-Equity Based) ---
+# Blocks NEW Initial Entries if today's floating equity drops by this % from start-of-day equity
+# Existing open baskets (grid positions) continue to be managed normally
+ENABLE_DAILY_LOSS_LIMIT = True
+DAILY_LOSS_LIMIT_PERCENT = 5.0   # Block new entries if equity -5.0% from today's start
 FRIDAY_STOP_HOUR = 15
 
 # --- Break-Even Settings ---
@@ -91,3 +96,4 @@ BE_LOCK_POINTS = 20          # Lock SL at Entry + 20pts after activation
 MT5_SERVER = ""
 MT5_LOGIN = 0
 MT5_PASSWORD = ""
+

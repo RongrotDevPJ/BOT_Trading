@@ -82,6 +82,15 @@ def main():
     last_reset_day = None
     start_of_day_equity = None
     daily_target_reached = False
+    daily_loss_limit_reached = False   # NEW: Blocks initial entries when floating loss > limit
+
+    # Startup Warmup Guard — blocks initial entries for 5 min after bot launch
+    STARTUP_WARMUP_SEC = 300
+    startup_time = time.time()
+    logger.info(f"[Warmup] Bot started. Initial entries blocked for {STARTUP_WARMUP_SEC}s to allow market stabilization.")
+
+    # Manual Close Detection — tracks which tickets the bot knows about
+    known_bot_tickets: set = set()
 
     # UI Cache
     last_ui_data_update = 0
@@ -302,8 +311,31 @@ def main():
                             strategy.csv_logger.db_manager.archive_old_data(days=90)
                         except Exception as e:
                             logger.error(f"Failed to archive old data: {e}")
+                        # Reset daily loss limit flag for new day
+                        daily_loss_limit_reached = False
 
-                # Check Daily Target
+                # --- Daily Loss Limit Check (Floating-Equity Based) ---
+                # Compares current equity vs start-of-day equity (includes floating losses)
+                if getattr(config, 'ENABLE_DAILY_LOSS_LIMIT', False) and start_of_day_equity is not None:
+                    account_info = client.get_account_info()
+                    if account_info:
+                        current_equity = account_info.equity
+                        loss_pct = ((start_of_day_equity - current_equity) / start_of_day_equity) * 100
+                        loss_limit = getattr(config, 'DAILY_LOSS_LIMIT_PERCENT', 5.0)
+                        if loss_pct >= loss_limit and not daily_loss_limit_reached:
+                            daily_loss_limit_reached = True
+                            logger.warning(f"🛑 [DailyLossLimit] Equity dropped {loss_pct:.2f}% today (limit: {loss_limit}%). Blocking new Initial Entries. Existing baskets still managed.")
+                            send_telegram_message(
+                                f"🛑 <b>Daily Loss Limit Hit: {config.SYMBOL}</b>\n"
+                                f"Equity: ${current_equity:.2f} (was ${start_of_day_equity:.2f})\n"
+                                f"Loss: -{loss_pct:.2f}% exceeds {loss_limit}% limit\n"
+                                f"New entries BLOCKED. Existing basket continues."
+                            )
+                        elif loss_pct < loss_limit * 0.8 and daily_loss_limit_reached:
+                            # Auto-reset if equity recovers back to 80% of limit (floating reversal)
+                            daily_loss_limit_reached = False
+                            logger.info(f"[DailyLossLimit] Equity recovered ({loss_pct:.2f}% < {loss_limit * 0.8:.2f}%). Initial entries re-enabled.")
+
                 if getattr(config, 'ENABLE_DAILY_TARGET', False) and start_of_day_equity is not None:
                     account_info = client.get_account_info()
                     if account_info:
@@ -369,8 +401,15 @@ def main():
                     )
                     last_csv_snapshot_log = current_time
 
-                # Check Time Filter AND Daily Target AND News Filter before allowing NEW initial entries
-                if not daily_target_reached and not close_only_mode and time_filter.is_allowed_to_trade() and is_news_safe(config.SYMBOL):
+                # Check Time Filter AND Daily Target AND News Filter AND Loss Limit AND Warmup before allowing NEW initial entries
+                is_warmed_up = (current_time - startup_time) >= STARTUP_WARMUP_SEC
+                if not is_warmed_up and current_time - startup_time < STARTUP_WARMUP_SEC + 5:
+                    remaining_warmup = int(STARTUP_WARMUP_SEC - (current_time - startup_time))
+                    if remaining_warmup > 0 and remaining_warmup % 60 == 0:
+                        logger.info(f"[Warmup] {remaining_warmup}s remaining before initial entries are allowed.")
+
+                if (is_warmed_up and not daily_target_reached and not daily_loss_limit_reached
+                        and not close_only_mode and time_filter.is_allowed_to_trade() and is_news_safe(config.SYMBOL)):
                     # Phase 3: Correlation Guard Check
                     if correlation_guard.is_allowed_to_open_initial(config.SYMBOL):
                         strategy.check_initial_entry(executor, current_rsi, current_ema, tick, current_stoch=current_stoch, current_atr=current_atr, equity=cached_equity)
@@ -383,7 +422,20 @@ def main():
                     # In Soft Stop, we still check is_max_drawdown_reached to keep it consistent
                     strategy.is_max_drawdown_reached(executor, tick)
                 
-                # Manage positions (Phase 2 & 3)
+                # --- Manual Close Detection ---
+                current_tickets = set(p.ticket for p in positions)
+                if known_bot_tickets:  # Only check after we have at least one previous tick
+                    bot_closed = getattr(strategy, '_last_closed_tickets', set())
+                    disappeared = known_bot_tickets - current_tickets - bot_closed
+                    if disappeared:
+                        logger.warning(f"[ManualClose] Detected manual closure of positions: {disappeared}")
+                        send_telegram_message(
+                            f"⚠️ <b>Manual Close Detected: {config.SYMBOL}</b>\n"
+                            f"Ticket(s): {', '.join(str(t) for t in disappeared)}\n"
+                            f"These were closed outside the bot. Basket cycle state updated."
+                        )
+                known_bot_tickets = current_tickets
+
                 strategy.check_basket_trailing(executor, tick, current_atr=current_atr)
                 executor.ghost_close_check(positions, tick, strategy)
                 executor.manage_partial_close(positions, tick)

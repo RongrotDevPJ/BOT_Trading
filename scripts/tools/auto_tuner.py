@@ -87,12 +87,12 @@ MIN_BUCKET_TRADES  = 5      # Trades in the winning bucket (sample-size guard)
 MIN_TOTAL_TRADES   = 15     # Total initial-entry closed trades (reliability guard)
 LOOKBACK_DAYS      = 30     # Rolling window fed to the SQL query
 
-# Maps each symbol to its bot directory (relative to project root)
-SYMBOL_BOT_MAP = {
-    "EURUSD": "bots/EURUSD_Grid",
-    "XAUUSD": "bots/XAUUSD_Grid",
-    "AUDNZD": "bots/AUDNZD_Grid",
-    "EURGBP": "bots/EURGBP_Grid",
+# Maps each symbol to its config file (relative to project root)
+CONFIG_MAP = {
+    "EURUSD": "configs/EURUSD.py",
+    "XAUUSD": "configs/XAUUSD.py",
+    "AUDNZD": "configs/AUDNZD.py",
+    "EURGBP": "configs/EURGBP.py",
 }
 
 # RSI levels are always integers in config; default fallbacks if parsing fails
@@ -409,12 +409,12 @@ def tune_symbol(
     logger.info(f"{'='*60}")
 
     # ── Locate config.py ──────────────────────────────────────────────────────
-    bot_dir     = SYMBOL_BOT_MAP.get(symbol)
-    if bot_dir is None:
-        logger.warning(f"[{symbol}] No bot directory mapping found. Skipping.")
-        return [f"⚠️ {symbol}: No bot mapping configured."]
+    config_rel_path = CONFIG_MAP.get(symbol)
+    if config_rel_path is None:
+        logger.warning(f"[{symbol}] No config mapping found. Skipping.")
+        return [f"⚠️ {symbol}: No config mapping configured."]
 
-    config_path = _PROJECT_ROOT / bot_dir / "config.py"
+    config_path = _PROJECT_ROOT / config_rel_path
     if not config_path.exists():
         logger.warning(f"[{symbol}] config.py not found at {config_path}. Skipping.")
         return [f"⚠️ {symbol}: config.py not found."]
@@ -569,7 +569,7 @@ def main() -> None:
 
     run_ts  = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     mode    = "DRY-RUN" if args.dry_run else "LIVE"
-    symbols = [args.symbol.upper()] if args.symbol else list(SYMBOL_BOT_MAP.keys())
+    symbols = [args.symbol.upper()] if args.symbol else list(CONFIG_MAP.keys())
 
     logger.info(f"")
     logger.info(f"{'#'*60}")
@@ -592,8 +592,8 @@ def main() -> None:
     all_report_lines: list[str] = []
 
     for symbol in symbols:
-        if symbol not in SYMBOL_BOT_MAP:
-            logger.warning(f"Symbol '{symbol}' is not in SYMBOL_BOT_MAP. Skipping.")
+        if symbol not in CONFIG_MAP:
+            logger.warning(f"Symbol '{symbol}' is not in CONFIG_MAP. Skipping.")
             all_report_lines.append(f"⚠️ Unknown symbol: {symbol}")
             continue
         lines = tune_symbol(symbol, db, dry_run=args.dry_run)

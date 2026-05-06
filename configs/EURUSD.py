@@ -81,6 +81,11 @@ TRADING_HOURS_START = "07:00"  # London open
 TRADING_HOURS_END = "20:00"    # NY close
 # --- Time Filter ---
 ALLOW_FRIDAY_TRADING = False
+# --- Daily Loss Limit (Floating-Equity Based) ---
+# Blocks NEW Initial Entries if today's floating equity drops by this % from start-of-day equity
+# Existing open baskets (grid positions) continue to be managed normally
+ENABLE_DAILY_LOSS_LIMIT = True
+DAILY_LOSS_LIMIT_PERCENT = 6.0   # Block new entries if equity -6.0% from today's start
 FRIDAY_STOP_HOUR = 15
 
 # --- Break-Even Settings ---
@@ -91,3 +96,4 @@ BE_LOCK_POINTS = 20          # Move SL to Entry + 20pts
 MT5_SERVER = ""
 MT5_LOGIN = 0
 MT5_PASSWORD = ""
+

@@ -43,9 +43,16 @@ class TradeExecutor:
         spread = info.spread
         # Use getattr to avoid AttributeError if MAX_ALLOWED_SPREAD is missing from a specific config
         max_spread = getattr(config, 'MAX_ALLOWED_SPREAD', 100)
+        
         if spread > max_spread:
             self.logger.warning(f"Spread too high ({spread}), entry rejected. (Limit: {max_spread})")
             return False
+            
+        # Phase 6: Spread Spike Pre-Alert (Warning zone >= 70% of max limit)
+        if spread > max_spread * 0.7:
+            self.logger.warning(f"⚠️ Spread Warning {symbol}: {spread}pts (Limit: {max_spread})")
+            send_telegram_message(f"⚠️ <b>Spread Warning {symbol}</b>\nCurrent: {spread} pts\nLimit: {max_spread} pts\nExecuting trade, but liquidity is low.")
+            
         return True
 
     def check_trade_allowed(self, symbol):
