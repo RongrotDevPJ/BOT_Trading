@@ -35,8 +35,8 @@ BASKET_TRAILING_STEP_USD = 6.0   # Quant-optimized: tighter step to lock profits
 import MetaTrader5 as ag
 TIMEFRAME = ag.TIMEFRAME_M5
 RSI_PERIOD = 14
-RSI_BUY_LEVEL = 35           # Buy trigger level
-RSI_SELL_LEVEL = 65          # Sell trigger level
+RSI_BUY_LEVEL = 30           # Tightened from 35: reduces false entries, more selective signal
+RSI_SELL_LEVEL = 70          # Tightened from 65: stronger confirmation required on Gold
 
 # Trend Filter (EMA 200)
 ENABLE_TREND_FILTER = True
@@ -69,7 +69,7 @@ ENABLE_PARTIAL_CLOSE = True
 MIN_POSITIONS_FOR_PARTIAL = 5
 MAX_DD_PERCENT = 30.0        # Max drawdown before safety actions
 ENABLE_HEDGE_ON_DD = True    # Auto-hedge if DD reached
-COOLDOWN_MINUTES = 15        # Minimum time between grid orders
+COOLDOWN_MINUTES = 30        # Increased from 15 → 30 min: prevents rapid grid stacking on volatile Gold
 MAX_CONSECUTIVE_LOSSES = 3   # Circuit breaker: pause 1h after N losing cycles
 HEARTBEAT_INTERVAL_SEC = 300 # Log bot status every 5 mins
 ENABLE_DAILY_TARGET = True   # Lock profits when daily target hit

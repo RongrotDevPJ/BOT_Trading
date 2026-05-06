@@ -178,7 +178,7 @@ class SmartGridStrategy:
         if current_rsi is None or tick is None or current_ema is None:
             return
 
-        if time.time() - self.last_initial_entry_time < 10.0:
+        if time.time() - self.last_initial_entry_time < 120.0:  # 2-minute cooldown between initial entries
             return
 
         # Phase 5: Consecutive Loss Cooldown Gate
@@ -253,6 +253,8 @@ class SmartGridStrategy:
             if enable_stoch and current_stoch:
                 self.initial_signals += f" | Stoch:{current_stoch[0]:.2f}"
 
+            # Pre-stamp timer BEFORE send_order to block duplicate entries even if MT5 returns None
+            self.last_initial_entry_time = time.time()
             result = executor.send_order(
                 config.SYMBOL, ag.ORDER_TYPE_BUY, initial_lot, tick.ask, 
                 atr_value=current_atr, rsi_value=current_rsi, 
@@ -260,8 +262,9 @@ class SmartGridStrategy:
                 entry_signals=self.initial_signals
             )
             if result:
-                self.last_initial_entry_time = time.time()
                 self.csv_logger.log_event(action="Initial Entry", side="BUY", price=tick.ask, rsi=current_rsi, ema=current_ema, lot_size=initial_lot, ticket=result.order, notes=stoch_str)
+            else:
+                self.logger.warning(f"[InitialEntry] BUY order failed or rejected by MT5 for {config.SYMBOL}. Cooldown still active (120s).")
             
         elif is_rsi_sell and is_trend_sell and is_stoch_sell:
             current_time = time.time()
@@ -290,6 +293,8 @@ class SmartGridStrategy:
             if enable_stoch and current_stoch:
                 self.initial_signals += f" | Stoch:{current_stoch[0]:.2f}"
 
+            # Pre-stamp timer BEFORE send_order to block duplicate entries even if MT5 returns None
+            self.last_initial_entry_time = time.time()
             result = executor.send_order(
                 config.SYMBOL, ag.ORDER_TYPE_SELL, initial_lot, tick.bid, 
                 atr_value=current_atr, rsi_value=current_rsi, 
@@ -297,8 +302,9 @@ class SmartGridStrategy:
                 entry_signals=self.initial_signals
             )
             if result:
-                self.last_initial_entry_time = time.time()
                 self.csv_logger.log_event(action="Initial Entry", side="SELL", price=tick.bid, rsi=current_rsi, ema=current_ema, lot_size=initial_lot, ticket=result.order, notes=stoch_str)
+            else:
+                self.logger.warning(f"[InitialEntry] SELL order failed or rejected by MT5 for {config.SYMBOL}. Cooldown still active (120s).")
 
     def get_dynamic_grid_distance(self, num_positions, current_atr):
          """Calculates distance based on ATR * Multiplier or Fixed Points with smart multipliers."""

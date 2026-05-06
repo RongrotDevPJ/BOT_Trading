@@ -285,9 +285,17 @@ def main():
                         reset_daily_target_state()
                         logger.info(f"--- DAILY RESET --- New trading day started. Starting Equity: {start_of_day_equity:.2f}")
                         
-                        # Send Daily Summary to Telegram (Phase 4)
-                        today_profit = strategy.csv_logger.db_manager.get_today_summary(symbol=config.SYMBOL)
-                        send_telegram_message(f"💰 <b>Daily Summary: {config.SYMBOL}</b>\nProfit: ${today_profit:.2f}\nEnd Equity: ${account_info.equity:.2f}")
+                        # Send Enhanced Daily Summary to Telegram
+                        yesterday_profit = strategy.csv_logger.db_manager.get_today_summary(symbol=config.SYMBOL)
+                        max_dd_today = ((account_info.balance - account_info.equity) / account_info.balance * 100) if account_info.balance > 0 else 0
+                        send_telegram_message(
+                            f"📊 <b>Daily Summary — {config.SYMBOL}</b>\n"
+                            f"Balance: ${account_info.balance:.2f} USC\n"
+                            f"Equity:  ${account_info.equity:.2f} USC\n"
+                            f"P&L: <b>${yesterday_profit:+.2f} USC</b>\n"
+                            f"Current DD: {max_dd_today:.2f}%\n"
+                            f"Status: {'🟢 Clear' if max_dd_today < 5 else '🟡 Monitor' if max_dd_today < 15 else '🔴 Alert'}"
+                        )
                         
                         # Auto-Archive old data (Phase 3)
                         try:

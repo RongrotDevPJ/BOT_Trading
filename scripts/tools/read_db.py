@@ -49,10 +49,10 @@ if __name__ == "__main__":
     print("--- Starting Database Export Process ---")
     
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    trading_db = os.path.normpath(os.path.join(script_dir, "../../Log_HistoryOrder/trading_data.db"))
-    backup_db = os.path.normpath(os.path.join(script_dir, "../../Log_HistoryOrder/backup_data.db"))
+    trading_db = os.path.normpath(os.path.join(script_dir, "../../data/db/trading_data.db"))
+    backup_db = os.path.normpath(os.path.join(script_dir, "../../data/db/backup_data.db"))
     
-    export_dir = os.path.normpath(os.path.join(script_dir, "../../Log_HistoryOrder/DB_Exports"))
+    export_dir = os.path.normpath(os.path.join(script_dir, "../../data/db/exports"))
     
     export_db_to_csv(trading_db, export_dir)
     export_db_to_csv(backup_db, export_dir)
