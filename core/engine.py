@@ -77,6 +77,7 @@ def main():
 
     last_heartbeat = time.time()
     last_snapshot_log = 0
+    last_wal_checkpoint = time.time()  # P2: Periodic WAL checkpoint every 6h
     last_csv_snapshot_log = 0 
     
     last_reset_day = None
@@ -138,8 +139,16 @@ def main():
                 time.sleep(10)
                 continue
 
-            # Soft Stop & Global Kill Switch
+            # P2: Periodic WAL Checkpoint (every 6 hours) — prevents WAL file from growing unbounded
+            if current_time - last_wal_checkpoint > 21600:
+                shared_db.checkpoint_wal()
+                last_wal_checkpoint = current_time
+                logger.info("[WAL] Periodic WAL checkpoint queued.")
+
+            # P1: Cache account_info ONCE per tick — reused for both DD check and UI cache
             account_info = client.get_account_info()
+
+            # Soft Stop & Global Kill Switch
             if account_info:
                 balance = account_info.balance
                 equity = account_info.equity
@@ -174,9 +183,8 @@ def main():
 
             mt5_status = "CONNECTED" if client.is_connected() else "DISCONNECTED"
             
-            # Update UI Data Cache every 10 seconds
+            # Update UI Data Cache every 10 seconds (reuses account_info already fetched above)
             if current_time - last_ui_data_update >= 10:
-                account_info = client.get_account_info()
                 if account_info:
                     cached_equity = account_info.equity
                     cached_balance = account_info.balance
@@ -268,7 +276,9 @@ def main():
                 # MAE/MFE Tracker
                 positions = strategy.get_positions()
                 if positions:
-                    point = client.get_symbol_info(config.SYMBOL).point
+                    # P1: Cache symbol_info.point OUTSIDE loop — avoids redundant MT5 API call per position
+                    _mae_sym_info = client.get_symbol_info(config.SYMBOL)
+                    point = _mae_sym_info.point if _mae_sym_info else 0.00001
                     for p in positions:
                         if p.ticket not in strategy.active_excursions:
                             strategy.active_excursions[p.ticket] = {'mfe': -1000000.0, 'mae': 1000000.0}
@@ -428,12 +438,38 @@ def main():
                     bot_closed = getattr(strategy, '_last_closed_tickets', set())
                     disappeared = known_bot_tickets - current_tickets - bot_closed
                     if disappeared:
-                        logger.warning(f"[ManualClose] Detected manual closure of positions: {disappeared}")
-                        send_telegram_message(
-                            f"⚠️ <b>Manual Close Detected: {config.SYMBOL}</b>\n"
-                            f"Ticket(s): {', '.join(str(t) for t in disappeared)}\n"
-                            f"These were closed outside the bot. Basket cycle state updated."
-                        )
+                        deals = client.get_history_deals(symbol=config.SYMBOL, magic=None, days=1)
+                        manual_closed = []
+                        sl_tp_closed = []
+                        
+                        for t in disappeared:
+                            # Find the OUT deal for this position
+                            # entry 1 = DEAL_ENTRY_OUT, 2 = DEAL_ENTRY_INOUT
+                            out_deals = [d for d in deals if d.position_id == t and d.entry in (1, 2)]
+                            if out_deals:
+                                deal = out_deals[-1]
+                                if deal.reason in (4, 5, 6): # SL, TP, SO
+                                    sl_tp_closed.append(t)
+                                elif deal.reason == 3: # EXPERT
+                                    pass # Closed by bot
+                                else:
+                                    manual_closed.append(t)
+                            else:
+                                manual_closed.append(t)
+                                
+                        if manual_closed:
+                            logger.warning(f"[ManualClose] Detected manual closure of positions: {manual_closed}")
+                            send_telegram_message(
+                                f"⚠️ <b>Manual Close Detected: {config.SYMBOL}</b>\n"
+                                f"Ticket(s): {', '.join(str(t) for t in manual_closed)}\n"
+                                f"These were closed outside the bot. Basket cycle state updated."
+                            )
+                        if sl_tp_closed:
+                            logger.info(f"[SL/TP/SO Hit] Positions closed by broker (SL/TP): {sl_tp_closed}")
+                            
+                        if hasattr(strategy, '_last_closed_tickets'):
+                            strategy._last_closed_tickets.clear()
+                            
                 known_bot_tickets = current_tickets
 
                 strategy.check_basket_trailing(executor, tick, current_atr=current_atr)
@@ -443,7 +479,11 @@ def main():
                 executor.apply_break_even(config.SYMBOL, positions, tick, symbol_info,
                                           activation_points=getattr(config, 'BE_ACTIVATION_POINTS', 300),
                                           lock_points=getattr(config, 'BE_LOCK_POINTS', 20))
-                executor.apply_trailing_stop(config.SYMBOL, positions, tick, symbol_info, atr=current_atr)
+                # P2: Dual-Exit Fix — disable per-position trailing when basket trailing is already active.
+                # Prevents individual SL hits from fragmenting the basket before the aggregate trailing fires.
+                basket_trailing_active = strategy.max_basket_pnl > -1000000.0
+                if not (getattr(config, 'USE_TRAILING_STOP', False) and basket_trailing_active):
+                    executor.apply_trailing_stop(config.SYMBOL, positions, tick, symbol_info, atr=current_atr)
 
             except Exception as e:
                 logger.error(f"Error during strategy execution: {e}", exc_info=True)

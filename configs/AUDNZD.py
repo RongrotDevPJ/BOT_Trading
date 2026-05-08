@@ -20,7 +20,7 @@ MAX_GRID_LEVELS = 10         # Maximum number of grid levels allowed
 
 # --- Dynamic Grid Settings ---
 GRID_DISTANCE_POINTS = 200   # Reduced from 250 — AUDNZD low volatility, tighter grid
-MIN_GRID_DISTANCE_POINTS = 150 # Reduced from 200 — allows faster averaging before reversion
+MIN_GRID_DISTANCE_POINTS = 200 # Increased from 150: avg MAE=-192pts, need wider floor to let price extend before averaging
 ENABLE_ATR_DISTANCE = True    # Enable ATR-based dynamic grid distance
 ATR_PERIOD = 14
 ATR_MULTIPLIER = 2.0

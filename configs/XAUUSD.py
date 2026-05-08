@@ -12,7 +12,7 @@ BASE_EQUITY = 5000.0         # Milestone for scaling (5000 USC = $50)
 BASE_LOT = 0.10              # Lot per BASE_EQUITY
 MAX_LOT = 2.0                # Cap to prevent broker rejection
 MIN_LOT = 0.01
-MIN_CYCLE_PROFIT_USC = 15.0  # Minimum profit in cents per grid cycle
+MIN_CYCLE_PROFIT_USC = 25.0  # Increased from 15.0: MFE data shows cycles can reach +81pts avg, hold for stronger reversal
 
 # --- Grid Scaling ---
 LOT_MULTIPLIER = 1.2         # Reduced from 1.5 — prevent exponential blowup on Gold

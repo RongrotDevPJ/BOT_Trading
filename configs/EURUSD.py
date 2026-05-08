@@ -35,8 +35,8 @@ BASKET_TRAILING_STEP_USD = 3.0
 import MetaTrader5 as ag
 TIMEFRAME = ag.TIMEFRAME_M5
 RSI_PERIOD = 14
-RSI_BUY_LEVEL = 38           # Slightly looser than 35 — EURUSD has momentum, entry timing matters
-RSI_SELL_LEVEL = 65          # Sell trigger level
+RSI_BUY_LEVEL = 32           # Tightened from 38: only take deeply oversold entries to avoid false signals in trending market
+RSI_SELL_LEVEL = 68          # Tightened from 65: require stronger overbought confirmation on EURUSD
 
 # Trend Filter (EMA 200)
 ENABLE_TREND_FILTER = True

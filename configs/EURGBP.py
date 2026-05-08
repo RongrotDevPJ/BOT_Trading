@@ -77,8 +77,8 @@ DAILY_TARGET_PERCENT = 15.0  # Stop trading for the day if equity grows by 15%
 DAILY_TARGET_TRAILING_PERCENT = 2.0  # Trailing distance from peak equity (%)
 # --- Session Filter ---
 ENABLE_SESSION_FILTER = True
-TRADING_HOURS_START = "22:00"  # Start of Asian Session (Broker Time)
-TRADING_HOURS_END = "06:00"    # End of Asian Session
+TRADING_HOURS_START = "07:00"  # London Session open — EURGBP liquidity peaks here
+TRADING_HOURS_END = "18:00"    # London/NY overlap close
 # --- Time Filter ---
 ALLOW_FRIDAY_TRADING = False
 # --- Daily Loss Limit (Floating-Equity Based) ---
