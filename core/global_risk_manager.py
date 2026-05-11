@@ -161,31 +161,50 @@ def trigger_emergency_close(reason="Unknown", trigger_bot="Unknown"):
             ticket = pos.ticket
             volume = pos.volume
             order_type = mt5.ORDER_TYPE_SELL if pos.type == mt5.POSITION_TYPE_BUY else mt5.ORDER_TYPE_BUY
-            tick = mt5.symbol_info_tick(symbol)
-            if tick is None:
-                logger.error(f"Could not get tick for {symbol}. Skipping close for ticket {ticket}.")
-                continue
-                
-            price = tick.bid if order_type == mt5.ORDER_TYPE_SELL else tick.ask
-            
-            request = {
-                "action": mt5.TRADE_ACTION_DEAL,
-                "symbol": symbol,
-                "volume": volume,
-                "type": order_type,
-                "position": ticket,
-                "price": price,
-                "deviation": 20,
-                "magic": pos.magic,
-                "comment": "GLOBAL KILL SWITCH",
-                "type_time": mt5.ORDER_TIME_GTC,
-                "type_filling": mt5.ORDER_FILLING_IOC,
-            }
-            result = mt5.order_send(request)
-            if result.retcode != mt5.TRADE_RETCODE_DONE:
-                logger.error(f"Failed to close position {ticket}: {result.comment}")
-            else:
-                logger.info(f"Successfully closed position {ticket} ({symbol})")
+
+            # P0 FIX: Retry with Exponential Backoff — prevents positions staying open during spreads spikes
+            MAX_CLOSE_RETRIES = 3
+            RETRY_DELAYS = [0.5, 1.5, 3.0]
+            closed_ok = False
+
+            for attempt in range(MAX_CLOSE_RETRIES + 1):
+                tick = mt5.symbol_info_tick(symbol)
+                if tick is None:
+                    logger.error(f"[EmergencyClose] No tick for {symbol} (attempt {attempt+1}). Retrying...")
+                    if attempt < MAX_CLOSE_RETRIES:
+                        time.sleep(RETRY_DELAYS[min(attempt, 2)])
+                    continue
+
+                price = tick.bid if order_type == mt5.ORDER_TYPE_SELL else tick.ask
+                # Widen deviation on retry to overcome spread spikes
+                deviation = 20 + (attempt * 200)
+
+                request = {
+                    "action": mt5.TRADE_ACTION_DEAL,
+                    "symbol": symbol,
+                    "volume": volume,
+                    "type": order_type,
+                    "position": ticket,
+                    "price": price,
+                    "deviation": deviation,
+                    "magic": pos.magic,
+                    "comment": "GLOBAL KILL SWITCH",
+                    "type_time": mt5.ORDER_TIME_GTC,
+                    "type_filling": mt5.ORDER_FILLING_IOC,
+                }
+                result = mt5.order_send(request)
+                if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+                    logger.info(f"[EmergencyClose] ✅ Closed ticket {ticket} ({symbol}) on attempt {attempt+1}")
+                    closed_ok = True
+                    break
+                else:
+                    code = result.retcode if result else "None"
+                    logger.error(f"[EmergencyClose] ❌ Attempt {attempt+1} failed: ticket={ticket} code={code}")
+                    if attempt < MAX_CLOSE_RETRIES:
+                        time.sleep(RETRY_DELAYS[min(attempt, 2)])
+
+            if not closed_ok:
+                logger.critical(f"[EmergencyClose] 🚨 FAILED to close ticket {ticket} ({symbol}) after {MAX_CLOSE_RETRIES+1} attempts!")
     
     logger.critical("Global Kill Switch: All positions processed. Trading suspended.")
 

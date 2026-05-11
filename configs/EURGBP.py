@@ -39,7 +39,8 @@ RSI_BUY_LEVEL = 35           # Buy trigger level
 RSI_SELL_LEVEL = 65          # Sell trigger level
 
 # Trend Filter (EMA 200)
-ENABLE_TREND_FILTER = True
+ENABLE_TREND_FILTER = True        # Filter EMA on INITIAL ENTRY only
+ENABLE_TREND_FILTER_ON_GRID = False  # False = Grid ไม้แก้ไม่ถูก EMA บล็อก (แนะนำ)
 EMA_PERIOD = 200
 EMA_TIMEFRAME = ag.TIMEFRAME_M15
 

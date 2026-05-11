@@ -452,35 +452,43 @@ class SmartGridStrategy:
 
         if distance_points >= required_distance:
             enable_trend = getattr(config, 'ENABLE_TREND_FILTER', True)
+            # GRID AVERAGING: EMA filter is optional on grid levels (default OFF)
+            # Only initial entry should be filtered by EMA trend.
+            # Once a position is open, the grid MUST be allowed to average regardless of trend.
+            enable_trend_on_grid = getattr(config, 'ENABLE_TREND_FILTER_ON_GRID', False)
             
-            # Check direction of movement relative to side AND APPLY TREND FILTER (EMA 200) if enabled
+            # Check direction of movement relative to side
             if side == 0 and current_price < latest_position.price_open:
-                # Price dropped below last buy order. Check if we are still above EMA (Uptrend) or if filter is disabled
-                if not enable_trend or current_price > current_ema:
+                # Price dropped below last buy order.
+                # Apply EMA filter ONLY if ENABLE_TREND_FILTER_ON_GRID is True
+                if not (enable_trend and enable_trend_on_grid) or current_price > current_ema:
                     current_time = time.time()
                     if current_time - self.last_analysis_log_time > 60:
                         atr_str = f"{current_atr:.5f}" if current_atr is not None else "0"
-                        self.logger.info(f"✨ [Analysis] BUY Grid Open: Price={current_price:.5f}, LastBuyPrice={latest_position.price_open:.5f}, Moved={distance_points:.1f}pts, Required={required_distance:.1f}pts, ATR={atr_str}, EMA={current_ema:.5f}")
+                        ema_note = f"EMA={current_ema:.5f} [Grid EMA Filter={'ON' if enable_trend_on_grid else 'OFF'}]"
+                        self.logger.info(f"✨ [Analysis] BUY Grid Open: Price={current_price:.5f}, LastBuyPrice={latest_position.price_open:.5f}, Moved={distance_points:.1f}pts, Required={required_distance:.1f}pts, ATR={atr_str}, {ema_note}")
                         self.last_analysis_log_time = current_time
                     return True
                 else:
                     current_time = time.time()
                     if current_time - self.last_trend_log_time > 60:
-                        self.logger.info(f"🚫 [Trend Filter] Blocked BUY Grid: Price({current_price:.5f}) is BELOW EMA({current_ema:.5f}) (Downtrend detected). Dist Moved={distance_points:.1f}pts")
+                        self.logger.info(f"🚫 [Trend Filter ON GRID] Blocked BUY Grid: Price({current_price:.5f}) is BELOW EMA({current_ema:.5f}). Dist={distance_points:.1f}pts")
                         self.last_trend_log_time = current_time
             elif side == 1 and current_price > latest_position.price_open:
-                # Price rose above last sell order. Check if we are still below EMA (Downtrend) or if filter is disabled
-                if not enable_trend or current_price < current_ema:
+                # Price rose above last sell order.
+                # Apply EMA filter ONLY if ENABLE_TREND_FILTER_ON_GRID is True
+                if not (enable_trend and enable_trend_on_grid) or current_price < current_ema:
                     current_time = time.time()
                     if current_time - self.last_analysis_log_time > 60:
                         atr_str = f"{current_atr:.5f}" if current_atr is not None else "0"
-                        self.logger.info(f"✨ [Analysis] SELL Grid Open: Price={current_price:.5f}, LastSellPrice={latest_position.price_open:.5f}, Moved={distance_points:.1f}pts, Required={required_distance:.1f}pts, ATR={atr_str}, EMA={current_ema:.5f}")
+                        ema_note = f"EMA={current_ema:.5f} [Grid EMA Filter={'ON' if enable_trend_on_grid else 'OFF'}]"
+                        self.logger.info(f"✨ [Analysis] SELL Grid Open: Price={current_price:.5f}, LastSellPrice={latest_position.price_open:.5f}, Moved={distance_points:.1f}pts, Required={required_distance:.1f}pts, ATR={atr_str}, {ema_note}")
                         self.last_analysis_log_time = current_time
                     return True
                 else:
                     current_time = time.time()
                     if current_time - self.last_trend_log_time > 60:
-                        self.logger.info(f"🚫 [Trend Filter] Blocked SELL Grid: Price({current_price:.5f}) is ABOVE EMA({current_ema:.5f}) (Uptrend detected). Dist Moved={distance_points:.1f}pts")
+                        self.logger.info(f"🚫 [Trend Filter ON GRID] Blocked SELL Grid: Price({current_price:.5f}) is ABOVE EMA({current_ema:.5f}). Dist={distance_points:.1f}pts")
                         self.last_trend_log_time = current_time
                 
         return False

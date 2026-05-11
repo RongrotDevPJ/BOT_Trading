@@ -134,7 +134,7 @@ class IndicatorClient:
         
     def get_ema(self, symbol, timeframe, period):
         """ Fetches data and calculates EMA. """
-        num_candles = period * 2 # Need enough historical data to stabilize EMA
+        num_candles = period * 3 # P2 FIX: Changed from * 2 to * 3 to ensure EMA fully stabilizes
         rates = ag.copy_rates_from_pos(symbol, timeframe, 0, num_candles)
         
         if rates is None or len(rates) < num_candles:
@@ -212,6 +212,7 @@ class IndicatorClient:
             utc_now  = datetime.datetime.utcnow()
             utc_from = utc_now - datetime.timedelta(seconds=lookback_seconds)
 
+            # P4 FIX: Use COPY_TICKS_TRADE to get volume data, or fallback to COPY_TICKS_ALL
             ticks = ag.copy_ticks_range(
                 symbol,
                 utc_from,
@@ -226,30 +227,35 @@ class IndicatorClient:
                 )
                 return None
 
-            up_ticks   = 0
-            down_ticks = 0
+            up_volume   = 0.0
+            down_volume = 0.0
 
-            # Walk tick array and compare consecutive ask prices
+            # Walk tick array and compare consecutive ask prices, weighting by volume
+            # If volume is 0 (e.g. some brokers for FX), it defaults to 1.0 (behaves like tick count)
             prev_ask = float(ticks[0]['ask'])
             for i in range(1, len(ticks)):
                 current_ask = float(ticks[i]['ask'])
+                # Use tick volume if available, otherwise default to 1.0
+                # Some symbols use 'volume' (real), others 'volume_real', some just tick counts
+                vol = float(ticks[i]['volume']) if ticks[i]['volume'] > 0 else 1.0
+                
                 if current_ask > prev_ask:
-                    up_ticks += 1
+                    up_volume += vol
                 elif current_ask < prev_ask:
-                    down_ticks += 1
+                    down_volume += vol
                 prev_ask = current_ask
 
-            total = up_ticks + down_ticks
+            total = up_volume + down_volume
             if total == 0:
                 # All ticks had identical ask price – treat as neutral
                 return 0.0
 
-            # Normalise: ranges from -1.0 (all down) to +1.0 (all up)
-            imbalance_score = (up_ticks - down_ticks) / total
+            # Normalise: ranges from -1.0 (all selling volume) to +1.0 (all buying volume)
+            imbalance_score = (up_volume - down_volume) / total
 
             self.logger.debug(
                 f"[TickImbalance] {symbol} | "
-                f"Ticks={len(ticks)} | Up={up_ticks} | Down={down_ticks} | "
+                f"Ticks={len(ticks)} | UpVol={up_volume:.1f} | DownVol={down_volume:.1f} | "
                 f"Score={imbalance_score:+.3f}"
             )
             # Store in cache

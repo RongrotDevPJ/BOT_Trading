@@ -194,7 +194,10 @@ class DBManager:
     def sync_deals(self, deals, active_excursions=None):
         """Queues a batch sync of deals."""
         if not deals: return
-        self.task_queue.put(("sync_deals", (deals, active_excursions), {}))
+        # P1 FIX: Pass a shallow COPY of active_excursions to avoid race condition.
+        # The worker thread reads this dict while the main thread may be writing to it.
+        excursions_snapshot = dict(active_excursions) if active_excursions else {}
+        self.task_queue.put(("sync_deals", (deals, excursions_snapshot), {}))
 
     def _execute_sync_deals(self, conn, deals, active_excursions):
         """Internal execution of sync_deals inside the worker thread."""

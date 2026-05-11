@@ -4,3 +4,7 @@ psutil
 requests
 pytz
 pandas
+scikit-learn
+plotly
+streamlit
+pyarrow==10.0.1

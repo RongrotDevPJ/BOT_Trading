@@ -39,6 +39,7 @@ from core.notifier import send_telegram_message
 from core.news_filter import is_safe_to_trade as is_news_safe
 from core.system_logger import setup_logger
 from core.correlation_manager import CorrelationGuard
+from core.regime_detector import RegimeDetector
 
 # Setup Persistent Logging
 logger = setup_logger(f"{config.SYMBOL}_Bot")
@@ -111,6 +112,10 @@ def main():
     current_atr = None
     current_ema = None
     current_stoch = None
+    
+    # Regime Detector
+    regime_detector = RegimeDetector()
+    last_regime_check = 0
 
     try:
         while True:
@@ -254,9 +259,8 @@ def main():
                 acc_drawdown_pct=cached_acc_drawdown_pct
             )
                 
-            # 2. Heartbeat logging
+            # 2. Heartbeat logging — reuses account_info already fetched above (P2: no duplicate call)
             if current_time - last_heartbeat > config.HEARTBEAT_INTERVAL_SEC:
-                account_info = client.get_account_info()
                 if account_info:
                     logger.info(f"--- HEARTBEAT --- Bot is running. Equity: {account_info.equity:.2f} Balance: {account_info.balance:.2f}")
                 else:
@@ -326,7 +330,7 @@ def main():
 
                 # --- Daily Loss Limit Check (Floating-Equity Based) ---
                 # Compares current equity vs start-of-day equity (includes floating losses)
-                if getattr(config, 'ENABLE_DAILY_LOSS_LIMIT', False) and start_of_day_equity is not None:
+                if getattr(config, 'ENABLE_DAILY_LOSS_LIMIT', False) and start_of_day_equity is not None and start_of_day_equity > 0:
                     account_info = client.get_account_info()
                     if account_info:
                         current_equity = account_info.equity
@@ -411,6 +415,13 @@ def main():
                     )
                     last_csv_snapshot_log = current_time
 
+                # 4. Regime Detection (Every 5 mins - Dry Run)
+                if current_time - last_regime_check > 300:
+                    state_name, prob = regime_detector.detect_regime(config.SYMBOL)
+                    if state_name != "UNKNOWN":
+                        logger.info(f"[Regime] {config.SYMBOL} is currently in {state_name} state (Prob: {prob}%)")
+                    last_regime_check = current_time
+
                 # Check Time Filter AND Daily Target AND News Filter AND Loss Limit AND Warmup before allowing NEW initial entries
                 is_warmed_up = (current_time - startup_time) >= STARTUP_WARMUP_SEC
                 if not is_warmed_up and current_time - startup_time < STARTUP_WARMUP_SEC + 5:
@@ -418,7 +429,13 @@ def main():
                     if remaining_warmup > 0 and remaining_warmup % 60 == 0:
                         logger.info(f"[Warmup] {remaining_warmup}s remaining before initial entries are allowed.")
 
-                if (is_warmed_up and not daily_target_reached and not daily_loss_limit_reached
+                # P1: BOT_ENABLED gate — allows pausing initial entries per-symbol without stopping grid
+                bot_enabled = getattr(config, 'BOT_ENABLED', True)
+                if not bot_enabled:
+                    if current_time - last_snapshot_log > 300:  # Log every 5 min
+                        logger.warning(f"[BOT_PAUSED] {config.SYMBOL}: BOT_ENABLED=False. Initial entries blocked. Grid management active.")
+
+                if (bot_enabled and is_warmed_up and not daily_target_reached and not daily_loss_limit_reached
                         and not close_only_mode and time_filter.is_allowed_to_trade() and is_news_safe(config.SYMBOL)):
                     # Phase 3: Correlation Guard Check
                     if correlation_guard.is_allowed_to_open_initial(config.SYMBOL):

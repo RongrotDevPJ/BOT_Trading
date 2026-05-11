@@ -16,7 +16,7 @@ MIN_CYCLE_PROFIT_USC = 25.0  # Increased from 15.0: MFE data shows cycles can re
 
 # --- Grid Scaling ---
 LOT_MULTIPLIER = 1.2         # Reduced from 1.5 — prevent exponential blowup on Gold
-MAX_GRID_LEVELS = 6          # Reduced from 10 — XAUUSD volatility makes deep grids lethal
+MAX_GRID_LEVELS = 4          # Reduced from 6 to 4 — limit exposure during strong trends
 
 # --- Dynamic Grid Settings ---
 GRID_DISTANCE_POINTS = 300   # Base distance fallback
@@ -39,7 +39,8 @@ RSI_BUY_LEVEL = 30           # Tightened from 35: reduces false entries, more se
 RSI_SELL_LEVEL = 70          # Tightened from 65: stronger confirmation required on Gold
 
 # Trend Filter (EMA 200)
-ENABLE_TREND_FILTER = True
+ENABLE_TREND_FILTER = True        # Filter EMA on INITIAL ENTRY only
+ENABLE_TREND_FILTER_ON_GRID = False  # False = Grid ไม้แก้ไม่ถูก EMA บล็อก (แนะนำ)
 EMA_PERIOD = 200
 EMA_TIMEFRAME = ag.TIMEFRAME_M15
 
@@ -67,7 +68,7 @@ TRAILING_STEP_POINTS = 10
 MAX_ALLOWED_SPREAD = 150     # Increased from 80 — XAU spread spikes to 100-300 pts on news
 ENABLE_PARTIAL_CLOSE = True
 MIN_POSITIONS_FOR_PARTIAL = 5
-MAX_DD_PERCENT = 30.0        # Max drawdown before safety actions
+MAX_DD_PERCENT = 20.0        # Reduced from 30.0% — Hedge/Emergency triggers faster
 ENABLE_HEDGE_ON_DD = True    # Auto-hedge if DD reached
 COOLDOWN_MINUTES = 30        # Increased from 15 → 30 min: prevents rapid grid stacking on volatile Gold
 MAX_CONSECUTIVE_LOSSES = 3   # Circuit breaker: pause 1h after N losing cycles

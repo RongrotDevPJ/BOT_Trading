@@ -39,7 +39,8 @@ RSI_BUY_LEVEL = 30           # Tightened from 35 — wait for genuine oversold
 RSI_SELL_LEVEL = 70          # Tightened from 65 — reduce false signals in thin market
 
 # Trend Filter (EMA 200)
-ENABLE_TREND_FILTER = True
+ENABLE_TREND_FILTER = True        # Filter EMA on INITIAL ENTRY only
+ENABLE_TREND_FILTER_ON_GRID = False  # False = Grid ไม้แก้ไม่ถูก EMA บล็อก (แนะนำ)
 EMA_PERIOD = 200
 EMA_TIMEFRAME = ag.TIMEFRAME_M15
 

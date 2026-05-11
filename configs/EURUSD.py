@@ -2,6 +2,10 @@
 SYMBOL = "EURUSD"
 MAGIC_NUMBER = 111111 # Unique Magic Number
 
+# ⚠️  TEMPORARILY PAUSED: Win Rate=0%, Kelly=-1.0 in last 30 days.
+# Set BOT_ENABLED = True to resume Initial Entries when market conditions improve.
+BOT_ENABLED = False  # P1: Pause new initial entries only. Grid management continues.
+
 # --- Trading Mode ---
 MAX_DEVIATION = 20 # Slippage allowance
 
@@ -39,7 +43,8 @@ RSI_BUY_LEVEL = 32           # Tightened from 38: only take deeply oversold entr
 RSI_SELL_LEVEL = 68          # Tightened from 65: require stronger overbought confirmation on EURUSD
 
 # Trend Filter (EMA 200)
-ENABLE_TREND_FILTER = True
+ENABLE_TREND_FILTER = True        # Filter EMA on INITIAL ENTRY only
+ENABLE_TREND_FILTER_ON_GRID = False  # False = Grid ไม้แก้ไม่ถูก EMA บล็อก (แนะนำ)
 EMA_PERIOD = 200
 EMA_TIMEFRAME = ag.TIMEFRAME_M15
 
