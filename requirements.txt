@@ -1,10 +1,27 @@
-MetaTrader5
-python-dotenv
-psutil
-requests
-pytz
-pandas
-scikit-learn
-plotly
-streamlit
-pyarrow==10.0.1
+# BOT_Trading — Python Dependencies
+# Updated for Dual XAUUSD Bot System (Live + Simulation)
+# Compatible with 1-core CPU / 4GB RAM VPS
+
+# ── Core MT5 & Trading ────────────────────────────────────────────────────────
+MetaTrader5>=5.0.45
+python-dotenv>=1.0.0
+
+# ── Machine Learning (CPU-optimized, no GPU required) ─────────────────────────
+lightgbm>=4.3.0           # Entry signal classifier (fast, low-memory)
+hmmlearn>=0.3.2           # Hidden Markov Model for regime detection
+scikit-learn>=1.4.0       # Preprocessing, metrics, utilities
+numpy>=1.24.0             # Required by all ML libs
+
+# ── Market Data APIs (all free) ───────────────────────────────────────────────
+yfinance>=0.2.40          # DXY, VIX, GLD (Yahoo Finance — free, no key)
+
+# ── Dashboard ────────────────────────────────────────────────────────────────
+streamlit>=1.35.0         # Web dashboard (existing dashboard.py)
+plotly>=5.22.0            # Charts for dashboard
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+requests>=2.31.0          # HTTP requests (NewsAPI, etc.)
+
+# ── Optional (for enhanced features) ─────────────────────────────────────────
+# pandas>=2.0.0           # Uncomment if data analysis needed
+# ta>=0.11.0              # Technical indicators library (backup)

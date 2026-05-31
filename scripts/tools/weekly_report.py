@@ -18,7 +18,7 @@ from contextlib import closing
 # ── Config ──────────────────────────────────────────────────────────────────
 DB_PATH = Path(__file__).resolve().parents[2] / "data" / "db" / "trading_data.db"
 LOOKBACK_DAYS = 30
-SYMBOLS = ["AUDNZD", "EURGBP", "EURUSD", "XAUUSD"]
+SYMBOLS = ["XAUUSD"]
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 def get_conn():

@@ -20,8 +20,8 @@ class DBManager:
         # Initialize the database schema synchronously
         self.initialize_db()
         
-        # Async Task Queue & Worker Thread
-        self.task_queue = queue.Queue()
+        # Async Task Queue & Worker Thread (maxsize prevents OOM on 4GB RAM VPS)
+        self.task_queue = queue.Queue(maxsize=500)
         self.worker_thread = threading.Thread(target=self._worker, daemon=True)
         self.worker_thread.start()
         self.logger.info("DB Logging Worker Thread started (Daemon).")

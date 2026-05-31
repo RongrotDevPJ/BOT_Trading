@@ -7,7 +7,7 @@ function Write-WARN  { param($msg) Write-Host "  [!!] $msg" -ForegroundColor Yel
 function Write-FAIL  { param($msg) Write-Host " [ERR] $msg" -ForegroundColor Red }
 
 $ROOT = (Get-Item $MyInvocation.MyCommand.Path).Directory.Parent.Parent.FullName
-$BOTS = @("AUDNZD","EURGBP","EURUSD","XAUUSD")
+$COMPONENTS = @("START_XAUUSD_LIVE", "START_SIMULATION", "START_DASHBOARD")
 $TASK_PREFIX = "BOT_Trading"
 
 Write-Host "============================================================" -ForegroundColor Magenta
@@ -61,11 +61,6 @@ if (Test-Path $envFile) {
     }
 }
 
-$envContent = Get-Content $envFile -Raw -ErrorAction SilentlyContinue
-if ($envContent -match "MT5_LOGIN=0") {
-    Write-WARN ".env still has placeholder MT5_LOGIN -- bots may fail to connect!"
-}
-
 # ═══════════════════════════════════════════════════════════════
 # STEP 4 — DB migration
 # ═══════════════════════════════════════════════════════════════
@@ -83,36 +78,34 @@ if ($LASTEXITCODE -eq 0) {
 # ═══════════════════════════════════════════════════════════════
 # STEP 5 — Add bots to Windows Startup Folder (no password needed)
 # ═══════════════════════════════════════════════════════════════
-Write-Step "5/6  Adding bots to Startup Folder (auto-start on login)"
+Write-Step "5/6  Adding components to Startup Folder (auto-start on login)"
 $pyExe = $pyCmd.Source
 $startupFolder = [System.Environment]::GetFolderPath("Startup")
 Write-Host "  Startup folder: $startupFolder" -ForegroundColor Gray
 
-foreach ($bot in $BOTS) {
-    $shortcutPath = Join-Path $startupFolder ("BOT_Trading_" + $bot + ".lnk")
-    $launcherScript = Join-Path $ROOT ("scripts\launchers\" + $bot + "_BOT.bat")
+foreach ($comp in $COMPONENTS) {
+    $shortcutPath = Join-Path $startupFolder ("BOT_Trading_" + $comp + ".lnk")
+    $launcherScript = Join-Path $ROOT ("scripts\launchers\" + $comp + ".bat")
 
     if (-not (Test-Path $launcherScript)) {
-        Write-WARN "Launcher not found for $bot -- skipping"
+        Write-WARN "Launcher not found for $comp -- skipping"
         continue
     }
 
-    # Remove old shortcut
     if (Test-Path $shortcutPath) { Remove-Item $shortcutPath -Force }
 
-    # Create shortcut to the .bat launcher
     $shell = New-Object -ComObject WScript.Shell
     $sc    = $shell.CreateShortcut($shortcutPath)
     $sc.TargetPath       = $launcherScript
     $sc.WorkingDirectory = Join-Path $ROOT "scripts\launchers"
     $sc.WindowStyle      = 1
-    $sc.Description      = "BOT_Trading $bot auto-start"
+    $sc.Description      = "BOT_Trading $comp auto-start"
     $sc.Save()
 
     if (Test-Path $shortcutPath) {
-        Write-OK "Startup shortcut created: $bot"
+        Write-OK "Startup shortcut created: $comp"
     } else {
-        Write-WARN "Failed to create shortcut for $bot"
+        Write-WARN "Failed to create shortcut for $comp"
     }
 }
 
@@ -131,7 +124,6 @@ $ec2  = $LASTEXITCODE
 if ($ec2 -eq 0) {
     Write-OK "Task registered: $reportTask (runs as SYSTEM every Sunday 08:00)"
 } else {
-    # Fallback: add to startup folder as well
     Write-WARN "schtasks failed ($out2) -- adding weekly report to Startup folder as fallback"
     $shortcutPath2 = Join-Path $startupFolder "BOT_WeeklyReport.lnk"
     if (Test-Path $shortcutPath2) { Remove-Item $shortcutPath2 -Force }
@@ -164,11 +156,10 @@ $allTasks | ForEach-Object {
 Write-Host ""
 Write-Host "Next Steps:" -ForegroundColor White
 Write-Host "  1. Verify .env has correct MT5 + Telegram credentials"
-Write-Host "  2. Start bots NOW: double-click scripts\START_ALL_VPS.bat"
+Write-Host "  2. Start bots NOW: double-click scripts\UNIVERSAL_START.ps1"
 Write-Host "  3. Bots will AUTO-START on next Windows Login/Reboot"
-Write-Host "  4. Weekly report sent to Telegram every Sunday 08:00"
 Write-Host ""
-Write-Host "To STOP all bots:   STOP_ALL_RUN_ME.bat"
-Write-Host "To UNINSTALL:       UNINSTALL_RUN_ME.bat"
+Write-Host "To STOP all bots:   scripts\admin\stop_all.ps1"
+Write-Host "To UNINSTALL:       scripts\admin\uninstall.ps1"
 Write-Host ""
 Read-Host "Press Enter to close"

@@ -38,8 +38,8 @@ from core.global_risk_manager import is_trading_suspended, check_margin_level, M
 from core.notifier import send_telegram_message
 from core.news_filter import is_safe_to_trade as is_news_safe
 from core.system_logger import setup_logger
-from core.correlation_manager import CorrelationGuard
-from core.regime_detector import RegimeDetector
+from core.regime_detector import RegimeDetector, REGIME_RANGING, REGIME_TRENDING, REGIME_VOLATILE
+from core.ml_signal import SignalTrainer
 
 # Setup Persistent Logging
 logger = setup_logger(f"{config.SYMBOL}_Bot")
@@ -69,7 +69,7 @@ def main():
     strategy = SmartGridStrategy(db=shared_db)
     indicator_client = IndicatorClient()
     time_filter = TimeFilterClient()
-    correlation_guard = CorrelationGuard()
+    ml_trainer = SignalTrainer()  # Daily ML retraining
 
     # Try to connect
     if not client.connect():
@@ -78,13 +78,14 @@ def main():
 
     last_heartbeat = time.time()
     last_snapshot_log = 0
-    last_wal_checkpoint = time.time()  # P2: Periodic WAL checkpoint every 6h
-    last_csv_snapshot_log = 0 
-    
+    last_wal_checkpoint = time.time()  # Periodic WAL checkpoint every 6h
+    last_csv_snapshot_log = 0
+    last_ml_train = 0  # Daily ML retraining tracker
+
     last_reset_day = None
     start_of_day_equity = None
     daily_target_reached = False
-    daily_loss_limit_reached = False   # NEW: Blocks initial entries when floating loss > limit
+    daily_loss_limit_reached = False
 
     # Startup Warmup Guard — blocks initial entries for 5 min after bot launch
     STARTUP_WARMUP_SEC = 300
@@ -113,9 +114,11 @@ def main():
     current_ema = None
     current_stoch = None
     
-    # Regime Detector
+    # Regime Detector (Production HMM)
     regime_detector = RegimeDetector()
     last_regime_check = 0
+    current_regime = REGIME_RANGING   # Default safe state
+    current_regime_prob = 0.0
 
     try:
         while True:
@@ -300,7 +303,7 @@ def main():
                 trading_day = current_server_time.date() if current_server_time.hour >= 5 else current_server_time.date() - datetime.timedelta(days=1)
                 
                 if last_reset_day != trading_day:
-                    account_info = client.get_account_info()
+                    # account_info already fetched at top of tick — reuse
                     if account_info:
                         start_of_day_equity = account_info.equity
                         last_reset_day = trading_day
@@ -328,10 +331,19 @@ def main():
                         # Reset daily loss limit flag for new day
                         daily_loss_limit_reached = False
 
+                # Daily ML model retrain (once per day, non-blocking)
+                if current_time - last_ml_train > 86400:
+                    try:
+                        ml_trainer.train()
+                        strategy.csv_logger.db_manager  # ensure connection alive
+                        logger.info("[ML] Daily model retrain triggered.")
+                    except Exception as ml_err:
+                        logger.warning(f"[ML] Retrain error: {ml_err}")
+                    last_ml_train = current_time
+
                 # --- Daily Loss Limit Check (Floating-Equity Based) ---
-                # Compares current equity vs start-of-day equity (includes floating losses)
+                # Uses account_info already fetched at top of tick
                 if getattr(config, 'ENABLE_DAILY_LOSS_LIMIT', False) and start_of_day_equity is not None and start_of_day_equity > 0:
-                    account_info = client.get_account_info()
                     if account_info:
                         current_equity = account_info.equity
                         loss_pct = ((start_of_day_equity - current_equity) / start_of_day_equity) * 100
@@ -351,7 +363,7 @@ def main():
                             logger.info(f"[DailyLossLimit] Equity recovered ({loss_pct:.2f}% < {loss_limit * 0.8:.2f}%). Initial entries re-enabled.")
 
                 if getattr(config, 'ENABLE_DAILY_TARGET', False) and start_of_day_equity is not None:
-                    account_info = client.get_account_info()
+                    # Reuse account_info from top of tick
                     if account_info:
                         current_equity = account_info.equity
                         target_equity = start_of_day_equity * (1 + getattr(config, 'DAILY_TARGET_PERCENT', 15.0) / 100.0)
@@ -415,11 +427,13 @@ def main():
                     )
                     last_csv_snapshot_log = current_time
 
-                # 4. Regime Detection (Every 5 mins - Dry Run)
+                # 4. Regime Detection (Every 5 mins — PRODUCTION, gates entries)
                 if current_time - last_regime_check > 300:
                     state_name, prob = regime_detector.detect_regime(config.SYMBOL)
                     if state_name != "UNKNOWN":
-                        logger.info(f"[Regime] {config.SYMBOL} is currently in {state_name} state (Prob: {prob}%)")
+                        current_regime = state_name
+                        current_regime_prob = prob
+                        logger.info(f"[Regime] {config.SYMBOL} → {state_name} ({prob:.0f}% confidence)")
                     last_regime_check = current_time
 
                 # Check Time Filter AND Daily Target AND News Filter AND Loss Limit AND Warmup before allowing NEW initial entries
@@ -435,16 +449,37 @@ def main():
                     if current_time - last_snapshot_log > 300:  # Log every 5 min
                         logger.warning(f"[BOT_PAUSED] {config.SYMBOL}: BOT_ENABLED=False. Initial entries blocked. Grid management active.")
 
-                if (bot_enabled and is_warmed_up and not daily_target_reached and not daily_loss_limit_reached
-                        and not close_only_mode and time_filter.is_allowed_to_trade() and is_news_safe(config.SYMBOL)):
-                    # Phase 3: Correlation Guard Check
-                    if correlation_guard.is_allowed_to_open_initial(config.SYMBOL):
-                        strategy.check_initial_entry(executor, current_rsi, current_ema, tick, current_stoch=current_stoch, current_atr=current_atr, equity=cached_equity)
+                # Regime Gate: VOLATILE blocks all entries; TRENDING limits grid depth
+                regime_blocks_entry = (
+                    getattr(config, 'ENABLE_REGIME_FILTER', True) and
+                    current_regime == REGIME_VOLATILE and
+                    getattr(config, 'REGIME_VOLATILE_BLOCK_ENTRY', True)
+                )
+                if regime_blocks_entry and current_time - last_snapshot_log > 300:
+                    logger.warning(f"[Regime] VOLATILE market — blocking new initial entries.")
 
-                # Execute grid logic (Always allowed even if target reached, to close existing grid)
-                # However, if SOFT STOP (close_only_mode) is active, we don't open NEW grid levels
-                if not close_only_mode:
-                    strategy.check_grid_logic(executor, current_atr, current_ema, equity=cached_equity)
+                if (bot_enabled and is_warmed_up and not daily_target_reached
+                        and not daily_loss_limit_reached and not close_only_mode
+                        and not regime_blocks_entry
+                        and time_filter.is_allowed_to_trade()
+                        and is_news_safe(config.SYMBOL)):
+                    strategy.check_initial_entry(
+                        executor, current_rsi, current_ema, tick,
+                        current_stoch=current_stoch, current_atr=current_atr,
+                        equity=cached_equity, current_regime=current_regime
+                    )
+
+                # Execute grid logic — always allowed to close existing grid
+                # In SOFT STOP or VOLATILE: don't open new grid levels
+                grid_blocked = close_only_mode or (
+                    getattr(config, 'ENABLE_REGIME_FILTER', True) and
+                    current_regime == REGIME_VOLATILE
+                )
+                if not grid_blocked:
+                    strategy.check_grid_logic(
+                        executor, current_atr, current_ema,
+                        equity=cached_equity, current_regime=current_regime
+                    )
                 else:
                     # In Soft Stop, we still check is_max_drawdown_reached to keep it consistent
                     strategy.is_max_drawdown_reached(executor, tick)
