@@ -1,4 +1,7 @@
 @echo off
+REM Change to project root folder automatically
+cd /d "%~dp0..\.."
+
 title XAUUSD Bot - Restart All Bots
 color 0E
 

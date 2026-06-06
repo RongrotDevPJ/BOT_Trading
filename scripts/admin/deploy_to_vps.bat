@@ -8,6 +8,9 @@ REM ============================================================
 title XAUUSD Bot - Deploy to VPS
 color 0A
 
+REM Change to project root folder automatically
+cd /d "%~dp0..\.."
+
 echo ============================================================
 echo  XAUUSD Bot - Auto Deploy to VPS
 echo ============================================================
