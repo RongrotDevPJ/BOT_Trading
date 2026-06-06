@@ -1,3 +1,4 @@
+from typing import Tuple, Tuple
 """
 core/regime_detector.py  (PRODUCTION — replaces dry-run version)
 ─────────────────────────────────────────────────────────────────────────────
@@ -58,7 +59,7 @@ class RegimeDetector:
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
-    def detect_regime(self, symbol: str, timeframe=None) -> tuple[str, float]:
+    def detect_regime(self, symbol: str, timeframe=None) -> Tuple[str, float]:
         """
         Returns (regime_name, confidence_pct).
         Automatically retrains if model is stale.
@@ -86,7 +87,7 @@ class RegimeDetector:
             self._last_prob = prob
             return regime, prob
 
-    def get_cached_regime(self) -> tuple[str, float]:
+    def get_cached_regime(self) -> Tuple[str, float]:
         """Return last known regime without triggering retrain."""
         return self._last_regime, self._last_prob
 
@@ -205,7 +206,7 @@ class RegimeDetector:
         )
         return True
 
-    def _infer(self, symbol: str, timeframe) -> tuple[str, float]:
+    def _infer(self, symbol: str, timeframe) -> Tuple[str, float]:
         """Run inference on the last 20 candles and return regime + confidence."""
         try:
             import numpy as np

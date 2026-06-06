@@ -45,7 +45,7 @@ def get_session(hour: int) -> int:
     return 0
 
 
-from typing import Optional
+from typing import List, Dict, Optional
 
 def build_features(rsi: float, atr: float, ema: float, price: float,
                    spread: int, tick_imbalance: Optional[float],
@@ -103,7 +103,7 @@ class SignalClassifier:
         else:
             logger.info(f"[MLSignal] No model at {self.model_path}. Neutral score (0.5) until trained.")
 
-    def predict(self, features: list[float]) -> float:
+    def predict(self, features: List[float]) -> float:
         """
         Returns probability [0.0, 1.0] that this entry will be profitable.
         0.5 = neutral (model not trained or feature error).
@@ -122,6 +122,34 @@ class SignalClassifier:
 
     def is_model_ready(self) -> bool:
         return self.model is not None
+
+
+class DirectionalClassifier:
+    """
+    Separate BUY and SELL signal classifiers.
+    BUY model: trained only on BUY closed trades
+    SELL model: trained only on SELL closed trades
+    Falls back to neutral 0.5 if model not ready.
+    """
+    def __init__(self,
+                 buy_model_path: str = "data/ml_models/lgbm_buy.pkl",
+                 sell_model_path: str = "data/ml_models/lgbm_sell.pkl"):
+        self.buy_clf = SignalClassifier(model_path=buy_model_path)
+        self.sell_clf = SignalClassifier(model_path=sell_model_path)
+
+    def predict_buy(self, features: list) -> float:
+        """Returns BUY signal probability [0.0, 1.0]."""
+        return self.buy_clf.predict(features)
+
+    def predict_sell(self, features: list) -> float:
+        """Returns SELL signal probability [0.0, 1.0]."""
+        return self.sell_clf.predict(features)
+
+    def is_buy_ready(self) -> bool:
+        return self.buy_clf.is_model_ready()
+
+    def is_sell_ready(self) -> bool:
+        return self.sell_clf.is_model_ready()
 
 
 # ── Trainer ────────────────────────────────────────────────────────────────────
@@ -250,3 +278,125 @@ class SignalTrainer:
             f"Model saved: {self.model_path}"
         )
         return True
+
+
+class DirectionalTrainer:
+    """
+    Trains separate BUY and SELL LightGBM models from closed trade DB.
+    BUY model: trained on trades where side='BUY'
+    SELL model: trained on trades where side='SELL'
+    Minimum 20 samples per side to train.
+    """
+    def __init__(self,
+                 db_path: str = "data/db/trading_data.db",
+                 buy_model_path: str = "data/ml_models/lgbm_buy.pkl",
+                 sell_model_path: str = "data/ml_models/lgbm_sell.pkl"):
+        self.db_path = Path(db_path)
+        self.buy_model_path = Path(buy_model_path)
+        self.sell_model_path = Path(sell_model_path)
+        self.buy_model_path.parent.mkdir(parents=True, exist_ok=True)
+        self.sell_model_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _load_data_for_side(self, side: str):
+        """Load closed trades for a specific side (BUY or SELL)."""
+        sql = """
+            SELECT rsi_value, atr_value, spread_at_entry,
+                   open_time_unix, profit, entry_signals
+            FROM trades
+            WHERE status = 'CLOSED'
+              AND side = ?
+              AND rsi_value IS NOT NULL
+              AND atr_value IS NOT NULL
+              AND profit IS NOT NULL
+            ORDER BY timestamp DESC
+            LIMIT 500
+        """
+        import sqlite3
+        conn = sqlite3.connect(str(self.db_path), timeout=10)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(sql, (side,)).fetchall()
+        conn.close()
+        return rows
+
+    def _train_side(self, side: str, model_path) -> bool:
+        """Train model for one side. Returns True if successful."""
+        try:
+            import lightgbm as lgb
+            import numpy as np
+        except ImportError:
+            logger.error("[DirectionalTrainer] lightgbm not installed.")
+            return False
+
+        rows = self._load_data_for_side(side)
+        MIN_SAMPLES = 20
+        if len(rows) < MIN_SAMPLES:
+            logger.info(f"[DirectionalTrainer] {side}: only {len(rows)} samples (need {MIN_SAMPLES}+). Skipping.")
+            return False
+
+        X_list, y_list = [], []
+        for row in rows:
+            try:
+                rsi    = float(row["rsi_value"] or 50)
+                atr    = float(row["atr_value"] or 0)
+                spread = float(row["spread_at_entry"] or 30)
+                profit = float(row["profit"] or 0)
+                ts     = int(row["open_time_unix"] or 0)
+                ema_dist = 0.0
+                imbalance = 0.0
+                sig = row["entry_signals"] or ""
+                for part in sig.split("|"):
+                    part = part.strip()
+                    if part.startswith("EMA:"):
+                        try: ema_dist = float(part.split(":")[1])
+                        except: pass
+                    if part.startswith("TickImb:"):
+                        try: imbalance = float(part.split(":")[1])
+                        except: pass
+                dt = datetime.fromtimestamp(ts) if ts > 0 else datetime.now()
+                features = build_features(
+                    rsi=rsi, atr=atr, ema=0.0, price=0.0,
+                    spread=int(spread), tick_imbalance=imbalance,
+                    hour=dt.hour, weekday=dt.weekday(), atr_20=None
+                )
+                features[2] = ema_dist
+                X_list.append(features)
+                y_list.append(1 if profit > 0 else 0)
+            except Exception as e:
+                logger.debug(f"[DirectionalTrainer] Skipped row: {e}")
+                continue
+
+        if len(X_list) < MIN_SAMPLES:
+            logger.info(f"[DirectionalTrainer] {side}: after filter {len(X_list)} samples. Skipping.")
+            return False
+
+        import numpy as np
+        X = np.array(X_list, dtype=float)
+        y = np.array(y_list, dtype=int)
+        win_count = y.sum()
+        loss_count = len(y) - win_count
+        scale_pos_weight = loss_count / win_count if win_count > 0 else 1.0
+
+        model = lgb.LGBMClassifier(
+            n_estimators=100, learning_rate=0.05,
+            num_leaves=15, min_child_samples=5,
+            scale_pos_weight=scale_pos_weight,
+            random_state=42, n_jobs=1, verbose=-1
+        )
+        model.fit(X, y, feature_name=FEATURE_NAMES)
+
+        import pickle
+        with open(model_path, "wb") as f:
+            pickle.dump(model, f)
+
+        acc = (model.predict(X) == y).mean()
+        logger.info(
+            f"[DirectionalTrainer] ✅ {side} model trained: {len(X)} samples, "
+            f"acc={acc:.1%}, W/L={win_count}/{loss_count}, saved={model_path}"
+        )
+        return True
+
+    def train(self) -> dict:
+        """Train both BUY and SELL models. Returns {buy: bool, sell: bool}."""
+        buy_ok  = self._train_side("BUY",  self.buy_model_path)
+        sell_ok = self._train_side("SELL", self.sell_model_path)
+        return {"buy": buy_ok, "sell": sell_ok}

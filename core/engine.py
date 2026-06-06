@@ -35,7 +35,9 @@ from core.time_filter import TimeFilterClient
 from core.display_manager import render_dashboard
 from core.strategy import SmartGridStrategy
 from core.global_risk_manager import is_trading_suspended, check_margin_level, MarginStatus, trigger_emergency_close, reset_daily_target_state, check_trailing_daily_target
-from core.notifier import send_telegram_message
+from core.notifier import (send_telegram_message, notify_trade_open,
+                            notify_trade_close, notify_drawdown_alert,
+                            notify_daily_summary, notify_bot_status)
 from core.news_filter import is_safe_to_trade as is_news_safe
 from core.system_logger import setup_logger
 from core.regime_detector import RegimeDetector, REGIME_RANGING, REGIME_TRENDING, REGIME_VOLATILE
@@ -78,6 +80,7 @@ def main():
 
     last_heartbeat = time.time()
     last_snapshot_log = 0
+    last_account_snapshot = 0
     last_wal_checkpoint = time.time()  # Periodic WAL checkpoint every 6h
     last_csv_snapshot_log = 0
     last_ml_train = 0  # Daily ML retraining tracker
@@ -170,6 +173,7 @@ def main():
                     trigger_emergency_close(reason=reason, trigger_bot=config.SYMBOL)
                     send_telegram_message(f"🚨 <b>CRITICAL: Global Kill Switch Triggered by {config.SYMBOL}!</b>\n{reason}. All positions closed.")
                     logger.critical(f"Global Kill Switch activated by {config.SYMBOL}! Trading stopped. Reason: {reason}")
+                    time.sleep(1)
                     continue
 
                 # Check Soft Stop
@@ -187,6 +191,7 @@ def main():
                         logger.warning("⚠️ [MarginGuard] Margin SOFT STOP active. Blocking new initial entries.")
                 elif margin_status == MarginStatus.EMERGENCY:
                     # Emergency close was triggered inside check_margin_level(); skip this tick.
+                    time.sleep(1)
                     continue
 
             mt5_status = "CONNECTED" if client.is_connected() else "DISCONNECTED"
@@ -234,8 +239,15 @@ def main():
             
             # Guard values
             tick = client.get_tick(config.SYMBOL)
+            if tick is None:
+                if current_time - last_ui_data_update >= 10:
+                    logger.error(f"Failed to fetch tick for {config.SYMBOL}. Connection may be lost. Reconnecting...")
+                    client.connect()
+                time.sleep(2)
+                continue
+
             symbol_info = client.get_symbol_info(config.SYMBOL)
-            current_spread = int((tick.ask - tick.bid) / symbol_info.point) if tick and symbol_info else 0
+            current_spread = int((tick.ask - tick.bid) / symbol_info.point) if symbol_info else 0
             max_spread = getattr(config, 'MAX_ALLOWED_SPREAD', 0)
             news_status = "STABLE"
 
@@ -312,15 +324,14 @@ def main():
                         logger.info(f"--- DAILY RESET --- New trading day started. Starting Equity: {start_of_day_equity:.2f}")
                         
                         # Send Enhanced Daily Summary to Telegram
-                        yesterday_profit = strategy.csv_logger.db_manager.get_today_summary(symbol=config.SYMBOL)
-                        max_dd_today = ((account_info.balance - account_info.equity) / account_info.balance * 100) if account_info.balance > 0 else 0
-                        send_telegram_message(
-                            f"📊 <b>Daily Summary — {config.SYMBOL}</b>\n"
-                            f"Balance: ${account_info.balance:.2f} USC\n"
-                            f"Equity:  ${account_info.equity:.2f} USC\n"
-                            f"P&L: <b>${yesterday_profit:+.2f} USC</b>\n"
-                            f"Current DD: {max_dd_today:.2f}%\n"
-                            f"Status: {'🟢 Clear' if max_dd_today < 5 else '🟡 Monitor' if max_dd_today < 15 else '🔴 Alert'}"
+                        yesterday_summary = strategy.csv_logger.db_manager.get_today_summary(symbol=config.SYMBOL)
+                        notify_daily_summary(
+                            symbol=config.SYMBOL,
+                            daily_pnl=yesterday_summary if isinstance(yesterday_summary, float) else 0.0,
+                            n_trades=0,  # Will be populated from DB in future version
+                            win_trades=0,
+                            balance=account_info.balance,
+                            equity=account_info.equity,
                         )
                         
                         # Auto-Archive old data (Phase 3)
@@ -351,11 +362,12 @@ def main():
                         if loss_pct >= loss_limit and not daily_loss_limit_reached:
                             daily_loss_limit_reached = True
                             logger.warning(f"🛑 [DailyLossLimit] Equity dropped {loss_pct:.2f}% today (limit: {loss_limit}%). Blocking new Initial Entries. Existing baskets still managed.")
-                            send_telegram_message(
-                                f"🛑 <b>Daily Loss Limit Hit: {config.SYMBOL}</b>\n"
-                                f"Equity: ${current_equity:.2f} (was ${start_of_day_equity:.2f})\n"
-                                f"Loss: -{loss_pct:.2f}% exceeds {loss_limit}% limit\n"
-                                f"New entries BLOCKED. Existing basket continues."
+                            notify_drawdown_alert(
+                                symbol=config.SYMBOL,
+                                dd_pct=loss_pct,
+                                equity=current_equity,
+                                balance=account_info.balance,
+                                threshold_pct=loss_limit,
                             )
                         elif loss_pct < loss_limit * 0.8 and daily_loss_limit_reached:
                             # Auto-reset if equity recovers back to 80% of limit (floating reversal)
@@ -411,6 +423,28 @@ def main():
                         # Skip logging but update timer to check again in 15 mins
                         last_snapshot_log = current_time
                     
+                # --- Account Snapshot to DB (Every 5 minutes) ---
+                if current_time - last_account_snapshot > 300:
+                    try:
+                        if account_info:
+                            positions_snap = strategy.get_positions()
+                            n_open = len(positions_snap)
+                            float_pnl = sum(p.profit for p in positions_snap) if positions_snap else 0.0
+                            dd_pct = ((account_info.balance - account_info.equity) / account_info.balance * 100) if account_info.balance > 0 else 0.0
+                            shared_db.log_account_snapshot(
+                                balance=account_info.balance,
+                                equity=account_info.equity,
+                                floating_pnl=float_pnl,
+                                open_trades=n_open,
+                                drawdown_pct=dd_pct,
+                                regime=current_regime,
+                                rsi=current_rsi,
+                                spread=current_spread,
+                            )
+                    except Exception as _snap_e:
+                        logger.debug(f"[Snapshot] {_snap_e}")
+                    last_account_snapshot = current_time
+
                 # --- Permanent CSV Market Snapshot (Every 1 Hour) ---
                 if current_time - last_csv_snapshot_log > 3600:
                     strategy.csv_logger.log_event(

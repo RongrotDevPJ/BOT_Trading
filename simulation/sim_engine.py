@@ -98,7 +98,7 @@ class SimRegimeDetector:
                 features.append([log_ret, atr_ratio, spread_r])
 
             X = np.array(features, dtype=float)
-            model = GaussianHMM(n_components=3, covariance_type="diag",
+            model = GaussianHMM(n_states=3, covariance_type="diag",
                                 n_iter=100, random_state=42)
             model.fit(X)
 

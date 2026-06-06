@@ -38,14 +38,15 @@ SWAP_SHORT_PER_LOT_PER_DAY = -0.3
 
 # ── Strategy Parameters ────────────────────────────────────────────────────────
 # --- Strategy 1: SMC/ICT ---
-SMC_SWING_LOOKBACK     = 20       # Bars to look back for Swing High/Low
-SMC_BOS_CONFIRM_BARS   = 2        # Bars above/below level to confirm BOS
+SMC_SWING_LOOKBACK     = 5        # Reduced: 20 → 5 (XAUUSD M5 needs shorter lookback to find swings)
+SMC_BOS_CONFIRM_BARS   = 1        # Reduced: 2 → 1 (less confirmation needed)
 SMC_OB_DEPTH_BARS      = 3        # Order Block lookback from BOS candle
 SMC_SL_ATR_MULTIPLIER  = 1.5     # SL = ATR * 1.5 below/above OB
 SMC_TP1_RR             = 1.5     # TP1 at 1.5R (50% close)
 SMC_TP2_RR             = 3.0     # TP2 at 3R (remaining 50%)
 SMC_MAX_RISK_PCT       = 1.0     # Max 1% per trade
 SMC_MAX_CONCURRENT     = 2       # Max 2 positions at once
+SMC_OB_EXPIRE_HOURS    = 4       # Expire OB retest lock after 4h
 
 # --- Strategy 2: ML-Based ---
 ML_LOOKBACK_CANDLES    = 50      # Feature window for prediction

@@ -23,7 +23,7 @@ import threading
 import time
 import json
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import List, Dict, Optional
 from pathlib import Path
 
 logger = logging.getLogger("MarketContext")
@@ -103,7 +103,7 @@ class GoldNewsSentiment:
         self.api_key = api_key
         self.refresh_sec = refresh_minutes * 60
         self._score: float = 0.0          # -1.0 to +1.0
-        self._headlines: list[str] = []
+        self._headlines: List[str] = []
         self._last_update: float = 0.0
         self._cache_file = CACHE_DIR / "gold_sentiment_cache.json"
         self._load_cache()
@@ -145,7 +145,8 @@ class GoldNewsSentiment:
                 f"q={query}&language=en&sortBy=publishedAt"
                 f"&pageSize=30&apiKey={self.api_key}"
             )
-            with urllib.request.urlopen(url, timeout=10) as r:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+            with urllib.request.urlopen(req, timeout=10) as r:
                 data = json.loads(r.read().decode())
 
             articles = data.get("articles", [])
@@ -160,7 +161,7 @@ class GoldNewsSentiment:
             logger.warning(f"[GoldSentiment] NewsAPI error: {e}. Using cached score.")
             return False
 
-    def _score_headlines(self, headlines: list[str]) -> float:
+    def _score_headlines(self, headlines: List[str]) -> float:
         bull, bear = 0, 0
         for h in headlines:
             h_lower = h.lower()
@@ -285,7 +286,7 @@ class EconomicCalendar:
 
     def __init__(self, block_minutes_before: int = 10,
                  block_minutes_after: int = 15):
-        self._events: list[dict] = []
+        self._events: List[dict] = []
         self._last_update: float = 0.0
         self._block_before = block_minutes_before * 60
         self._block_after  = block_minutes_after * 60
@@ -310,7 +311,8 @@ class EconomicCalendar:
             import urllib.request
             # ForexFactory RSS/JSON endpoint (unofficial but reliable)
             url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
-            with urllib.request.urlopen(url, timeout=10) as r:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+            with urllib.request.urlopen(req, timeout=10) as r:
                 events = json.loads(r.read().decode())
             
             # Filter high-impact USD events

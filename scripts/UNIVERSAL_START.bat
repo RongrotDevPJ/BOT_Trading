@@ -1,3 +1,11 @@
+<# :
+@echo off
+setlocal
+set "BAT_FILE_PATH=%~f0"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "iex ((Get-Content -LiteralPath $env:BAT_FILE_PATH -Raw) -replace '(?s)^.*<#POWERSHELL_START#>', '')"
+exit /b %errorlevel%
+#>
+<#POWERSHELL_START#>
 # Master Universal Launcher for Dual XAUUSD System
 # This script launches Live Bot, Simulation Bot, and the Dashboard automatically.
 

@@ -25,7 +25,7 @@ Risk: 1% per trade (dynamic lot from equity × 1%).
 
 import logging
 import time
-from typing import Optional
+from typing import List, Dict, Optional
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -71,10 +71,10 @@ class MarketStructure:
     Works on OHLCV candle arrays (MT5 structured numpy arrays).
     """
 
-    def __init__(self, swing_lookback: int = 20, bos_confirm_bars: int = 2):
+    def __init__(self, swing_lookback: int = 5, bos_confirm_bars: int = 1):
         self.swing_lookback = swing_lookback
         self.bos_confirm_bars = bos_confirm_bars
-        self._swings: list[SwingPoint] = []
+        self._swings: List[SwingPoint] = []
 
     def find_swing_high(self, rates, i: int) -> bool:
         lb = self.swing_lookback
@@ -97,8 +97,8 @@ class MarketStructure:
           - trend: 'BULL', 'BEAR', 'NEUTRAL'
           - last_bos: OrderBlock or None
           - last_choch: price level or None
-          - fvgs: list[FairValueGap]
-          - swings: list[SwingPoint]
+          - fvgs: List[FairValueGap]
+          - swings: List[SwingPoint]
         """
         if rates is None or len(rates) < self.swing_lookback * 2 + 5:
             return {"trend": "NEUTRAL", "last_bos": None, "fvgs": []}
@@ -112,6 +112,7 @@ class MarketStructure:
                 lows.append((i, float(rates[i]["low"]), rates[i]["time"]))
 
         if len(highs) < 2 or len(lows) < 2:
+            logger.debug(f"[SMC] Not enough swing points: highs={len(highs)} lows={len(lows)} (need ≥2 each)")
             return {"trend": "NEUTRAL", "last_bos": None, "fvgs": []}
 
         # 2. Determine trend from last 2 swing points
@@ -195,7 +196,7 @@ class MarketStructure:
                     )
         return None
 
-    def _find_fvgs(self, rates, lookback: int = 50) -> list[FairValueGap]:
+    def _find_fvgs(self, rates, lookback: int = 50) -> List[FairValueGap]:
         """Detect Fair Value Gaps: 3-candle pattern where candle 1 and 3 don't overlap."""
         fvgs = []
         start = max(1, len(rates) - lookback)
@@ -239,12 +240,13 @@ class SMCStrategy:
         self.db = db
         self.market_ctx = market_ctx
         self.structure = MarketStructure(
-            swing_lookback=cfg.SMC_SWING_LOOKBACK,
-            bos_confirm_bars=cfg.SMC_BOS_CONFIRM_BARS,
+            swing_lookback=getattr(cfg, 'SMC_SWING_LOOKBACK', 5),
+            bos_confirm_bars=getattr(cfg, 'SMC_BOS_CONFIRM_BARS', 1),
         )
-        self.open_positions: list[SimPosition] = []
-        self._ob_retest_tracker: dict = {}   # ob_id → True/False (already entered?)
+        self.open_positions: List[SimPosition] = []
+        self._ob_retest_tracker: dict = {}   # ob_id → (traded: bool, found_time: float)
         self._last_entry_time = 0.0
+        self._last_debug_log = 0.0
 
     def update(self, tick, account: dict, rates_m5, rates_h1=None):
         """
@@ -275,14 +277,31 @@ class SMCStrategy:
         trend  = struct.get("trend", "NEUTRAL")
         ob     = struct.get("last_bos")
 
+        # Debug log every 10 minutes to show what SMC sees
+        now = time.time()
+        if now - self._last_debug_log > 600:
+            logger.info(
+                f"[SMC DEBUG] trend={trend} | ob={'Found' if ob else 'None'} | "
+                f"price={ask:.2f} | open_pos={len(self.open_positions)}"
+            )
+            self._last_debug_log = now
+
         if trend == "NEUTRAL" or ob is None:
             return
 
         equity   = account.get("equity", self.cfg.SIM_INITIAL_BALANCE)
         ob_id    = f"{ob.side}_{ob.high:.2f}_{ob.low:.2f}"
 
-        if self._ob_retest_tracker.get(ob_id):
-            return  # Already traded this OB
+        # Expire OB tracker after 4 hours (prevent permanent lock)
+        OB_EXPIRE_SEC = 14400
+        if ob_id in self._ob_retest_tracker:
+            entry_time = self._ob_retest_tracker[ob_id]
+            if isinstance(entry_time, bool):
+                return  # Legacy bool entry — skip (already traded)
+            if time.time() - entry_time > OB_EXPIRE_SEC:
+                del self._ob_retest_tracker[ob_id]  # Expired, allow re-entry
+            else:
+                return  # Still active, already traded
 
         if ob.side == "BULL":
             # Enter BUY if price has returned into the OB zone (after BOS above)
@@ -309,8 +328,10 @@ class SMCStrategy:
                         f"SL:{sl:.2f} TP1:{tp1:.2f} TP2:{tp2:.2f} | "
                         f"Lot:{lot:.2f} | OB zone [{ob.low:.2f}-{ob.high:.2f}]"
                     )
-                    self._ob_retest_tracker[ob_id] = True
+                    self._ob_retest_tracker[ob_id] = time.time()  # Store timestamp, not bool
                     self._last_entry_time = time.time()
+                else:
+                    logger.debug(f"[SMC] BUY fill failed @ {ask:.2f} OB=[{ob.low:.2f}-{ob.high:.2f}]")
 
         elif ob.side == "BEAR":
             if ob.low <= bid <= ob.high:
@@ -319,10 +340,10 @@ class SMCStrategy:
                 if sl_pts <= 0:
                     return
                 lot = self._calc_lot(equity, sl_pts)
-                tp1 = bid - (bid - sl) * self.cfg.SMC_TP1_RR  # wait: this is wrong
-                # Correct for SELL: TP is BELOW entry
-                tp1 = bid - (sl - bid) * self.cfg.SMC_TP1_RR
-                tp2 = bid - (sl - bid) * self.cfg.SMC_TP2_RR
+                # SELL: TP is BELOW entry price (bid - R-multiple of risk)
+                risk  = sl - bid   # positive distance to SL
+                tp1 = bid - risk * self.cfg.SMC_TP1_RR
+                tp2 = bid - risk * self.cfg.SMC_TP2_RR
 
                 order = SimOrder(
                     strategy=self.STRATEGY_NAME, side="SELL", lot_size=lot,
@@ -338,8 +359,10 @@ class SMCStrategy:
                         f"SL:{sl:.2f} TP1:{tp1:.2f} TP2:{tp2:.2f} | "
                         f"Lot:{lot:.2f}"
                     )
-                    self._ob_retest_tracker[ob_id] = True
+                    self._ob_retest_tracker[ob_id] = time.time()  # Store timestamp, not bool
                     self._last_entry_time = time.time()
+                else:
+                    logger.debug(f"[SMC] SELL fill failed @ {bid:.2f} OB=[{ob.low:.2f}-{ob.high:.2f}]")
 
     def _manage_positions(self, ask, bid, rates, atr, dt):
         """Check TP1, TP2, and SL hits for all open positions."""

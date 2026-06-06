@@ -1,3 +1,11 @@
+<# :
+@echo off
+setlocal
+set "BAT_FILE_PATH=%~f0"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "iex ((Get-Content -LiteralPath $env:BAT_FILE_PATH -Raw) -replace '(?s)^.*<#POWERSHELL_START#>', '')"
+exit /b %errorlevel%
+#>
+<#POWERSHELL_START#>
 $ErrorActionPreference = "SilentlyContinue"
 $Host.UI.RawUI.WindowTitle = "BOT_Trading Setup"
 
@@ -6,7 +14,7 @@ function Write-OK    { param($msg) Write-Host "  [OK] $msg" -ForegroundColor Gre
 function Write-WARN  { param($msg) Write-Host "  [!!] $msg" -ForegroundColor Yellow }
 function Write-FAIL  { param($msg) Write-Host " [ERR] $msg" -ForegroundColor Red }
 
-$ROOT = (Get-Item $MyInvocation.MyCommand.Path).Directory.Parent.Parent.FullName
+$ROOT = (Get-Item $env:BAT_FILE_PATH).Directory.Parent.Parent.FullName
 $COMPONENTS = @("START_XAUUSD_LIVE", "START_SIMULATION", "START_DASHBOARD")
 $TASK_PREFIX = "BOT_Trading"
 

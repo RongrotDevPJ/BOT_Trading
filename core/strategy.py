@@ -226,6 +226,11 @@ class SmartGridStrategy:
         if len(buy_positions) > 0 or len(sell_positions) > 0:
             return  # Trade cycle already active
 
+        # Max open positions guard — hard cap regardless of grid level
+        max_open = getattr(config, 'MAX_GRID_LEVELS', 4)
+        if len(positions) >= max_open:
+            return
+
         # Check News Filter (Phase 2)
         if not is_safe_to_trade(config.SYMBOL):
             return
@@ -256,6 +261,9 @@ class SmartGridStrategy:
                  stoch_str = f"| Stoch={k:.2f}"
 
         if is_rsi_buy and is_trend_buy and is_stoch_buy:
+            # Direction gate: check ENABLE_BUY flag
+            if not getattr(config, 'ENABLE_BUY', True):
+                return
             current_time = time.time()
             # In TRENDING regime, only allow BUY if trend is UP (price > EMA)
             if current_regime == "TRENDING" and tick.ask <= current_ema:
@@ -321,8 +329,33 @@ class SmartGridStrategy:
                 self.logger.warning(f"[InitialEntry] BUY order failed or rejected by MT5 for {config.SYMBOL}. Cooldown still active (120s).")
             
         elif is_rsi_sell and is_trend_sell and is_stoch_sell:
+            # Direction gate: check ENABLE_SELL flag
+            if not getattr(config, 'ENABLE_SELL', True):
+                self.logger.debug("[Direction] SELL entry blocked — ENABLE_SELL=False (BUY Only Mode)")
+                return
             current_time = time.time()
-            # In TRENDING regime, only allow SELL if trend is DOWN (price < EMA)
+
+            # ── Smart SELL: Regime-Aware Gate ──────────────────────────────────
+            # Requires ALL 3 conditions simultaneously (from audit findings):
+            #   1. Regime = BEAR or RANGING (not TRENDING UP)
+            #   2. Price < EMA200 (confirmed downtrend)
+            #   3. RSI >= RSI_SELL_LEVEL (overbought)
+            if getattr(config, 'SMART_SELL_REQUIRE_REGIME_BEAR', False):
+                if current_regime not in ("BEAR", "RANGING", "UNKNOWN"):
+                    self.logger.info(
+                        f"[SmartSELL] Blocked — Regime={current_regime} (need BEAR/RANGING). "
+                        f"RSI={current_rsi:.2f}"
+                    )
+                    return
+            if getattr(config, 'SMART_SELL_REQUIRE_BELOW_EMA', False):
+                if tick.bid >= current_ema:
+                    self.logger.info(
+                        f"[SmartSELL] Blocked — Price({tick.bid:.2f}) >= EMA({current_ema:.2f}). "
+                        f"Cannot SELL in uptrend."
+                    )
+                    return
+
+            # Legacy regime check (kept for backward compat)
             if current_regime == "TRENDING" and tick.bid >= current_ema:
                 self.logger.info(f"[Regime] TRENDING market — blocking counter-trend SELL (price>EMA).")
                 return

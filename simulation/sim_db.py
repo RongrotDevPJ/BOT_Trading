@@ -5,6 +5,7 @@ Separate from the live bot DB — no writes to trading_data.db.
 """
 
 import sqlite3
+from typing import List, Dict, Optional, Any
 import queue
 import threading
 import logging
@@ -133,7 +134,7 @@ class SimDB:
 
     # ── Public Read API ────────────────────────────────────────────────────────
 
-    def get_closed_trades(self, strategy: str = None, limit: int = 500) -> list[dict]:
+    def get_closed_trades(self, strategy: str = None, limit: int = 500) -> List[dict]:
         """Returns closed trades as list of dicts. Synchronous read."""
         where = "WHERE status = 'CLOSED'"
         params = []
@@ -144,7 +145,7 @@ class SimDB:
         params.append(limit)
         return self._read(sql, params)
 
-    def get_open_trades(self, strategy: str = None) -> list[dict]:
+    def get_open_trades(self, strategy: str = None) -> List[dict]:
         where = "WHERE status = 'OPEN'"
         params = []
         if strategy:
@@ -152,7 +153,7 @@ class SimDB:
             params.append(strategy)
         return self._read(f"SELECT * FROM sim_trades {where}", params)
 
-    def get_balance_history(self, limit: int = 1000) -> list[dict]:
+    def get_balance_history(self, limit: int = 1000) -> List[dict]:
         return self._read(
             "SELECT timestamp, balance, equity, regime FROM sim_snapshots ORDER BY timestamp DESC LIMIT ?",
             [limit]
@@ -248,7 +249,7 @@ class SimDB:
                 list(data.values())
             )
 
-    def _read(self, sql: str, params: list = None) -> list[dict]:
+    def _read(self, sql: str, params: list = None) -> List[dict]:
         try:
             conn = sqlite3.connect(str(self.db_path), timeout=5)
             conn.row_factory = sqlite3.Row

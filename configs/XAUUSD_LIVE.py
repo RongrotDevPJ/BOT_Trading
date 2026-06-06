@@ -25,7 +25,7 @@ KELLY_MAX_FRACTION = 0.20
 
 # ── Grid Parameters ────────────────────────────────────────────────────────────
 LOT_MULTIPLIER          = 1.2    # Conservative — prevent blowup
-MAX_GRID_LEVELS         = 4      # Hard cap; regime may reduce to 2
+MAX_GRID_LEVELS         = 2      # Reduced from 4 → 2 (limit exposure after -97% loss event)
 GRID_DISTANCE_POINTS    = 300    # Fallback fixed
 MIN_GRID_DISTANCE_POINTS = 600   # ATR floor
 ENABLE_ATR_DISTANCE     = True
@@ -39,8 +39,7 @@ COOLDOWN_MINUTES        = 5
 MIN_CYCLE_PROFIT_USC      = 25.0   # Min profit target per cycle
 BASKET_TP_POINTS          = 50
 BASKET_TRAILING_STEP_USD  = 6.0
-BASKET_HARD_STOP_USC      = -80.0  # NEW: Hard stop if basket loss > $0.80 USC
-                                    # Prevents catastrophic drawdown in strong trend
+BASKET_HARD_STOP_USC      = -40.0  # Tightened: -80 → -40 USC (prevent large Grid losses)
 
 # ── Exit Strategy ──────────────────────────────────────────────────────────────
 USE_TRAILING_STOP      = True
@@ -54,7 +53,7 @@ import MetaTrader5 as mt5
 TIMEFRAME     = mt5.TIMEFRAME_M5
 RSI_PERIOD    = 14
 RSI_BUY_LEVEL = 35
-RSI_SELL_LEVEL = 65
+RSI_SELL_LEVEL = 70   # Raised from 65 → 70 (SELL PF was 0.37, too many premature SELL entries)
 EMA_PERIOD    = 200
 EMA_TIMEFRAME = mt5.TIMEFRAME_M15
 
@@ -80,9 +79,27 @@ ENABLE_TREND_FILTER         = True
 ENABLE_TREND_FILTER_ON_GRID = False
 
 # ── Risk Management ────────────────────────────────────────────────────────────
-MAX_DD_PERCENT      = 20.0
+MAX_DD_PERCENT      = 10.0   # Tightened: 20% → 10%
 ENABLE_HEDGE_ON_DD  = True
-MAX_CONSECUTIVE_LOSSES = 3
+MAX_CONSECUTIVE_LOSSES = 2   # Tightened: 3 → 2
+
+# ── Direction Control (BUY Only Mode) ─────────────────────────────────────────
+# VERIFIED: SELL PF = 0.38 (N=46), BUY PF = 2.24 (N=40) from 86-trade DB
+ENABLE_SELL = False   # ⛔ SELL entries disabled — BUY Only Mode
+ENABLE_BUY  = True    # ✅ BUY entries enabled
+
+# ── Smart SELL Conditions (used when ENABLE_SELL=True in future) ───────────────
+# ALL 3 must be True simultaneously to allow SELL entry:
+#   1. Regime = BEAR (from HMM detector)
+#   2. RSI >= RSI_SELL_LEVEL (currently 70)
+#   3. Price < EMA200
+# Currently ENABLE_SELL=False overrides this — will re-enable after N_SELL >= 100, PF > 1.0
+SMART_SELL_REQUIRE_REGIME_BEAR = True   # Must be BEAR regime
+SMART_SELL_REQUIRE_BELOW_EMA   = True   # Must be Price < EMA200
+
+# ── Day Filters ────────────────────────────────────────────────────────────────
+# Monday: PF=0.14, N=16 (PRELIMINARY — enabled for more data collection)
+BLOCK_MONDAY = False   # Set True to block Monday entries
 
 # ── Daily Limits ───────────────────────────────────────────────────────────────
 ENABLE_DAILY_TARGET          = True
@@ -96,9 +113,10 @@ ENABLE_PARTIAL_CLOSE      = True
 MIN_POSITIONS_FOR_PARTIAL = 5
 
 # ── Session & Time ─────────────────────────────────────────────────────────────
-ENABLE_SESSION_FILTER = False   # Gold is 24h but avoid thin Asian session
+ENABLE_SESSION_FILTER = True    # ENABLED: Block Hour 19 UTC (worst hour — PF=0.04, Net=-671 USC)
 TRADING_HOURS_START   = "00:00"
 TRADING_HOURS_END     = "23:59"
+BLOCKED_HOURS_UTC     = [19]    # Hour 19 UTC = 02:00 ICT — proven worst hour from audit
 ALLOW_FRIDAY_TRADING  = False
 FRIDAY_STOP_HOUR      = 15
 

@@ -111,11 +111,30 @@ class DBManager:
             exec_time_ms INTEGER
         );
         """
+        sql_create_snapshots_table = """
+        CREATE TABLE IF NOT EXISTS account_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            balance REAL NOT NULL,
+            equity REAL NOT NULL,
+            floating_pnl REAL DEFAULT 0.0,
+            open_trades INTEGER DEFAULT 0,
+            drawdown_pct REAL DEFAULT 0.0,
+            regime TEXT DEFAULT 'UNKNOWN',
+            rsi REAL,
+            spread REAL
+        );
+        """
+        sql_create_snapshots_index = """
+        CREATE INDEX IF NOT EXISTS idx_snapshots_ts ON account_snapshots(timestamp);
+        """
         conn = self.get_connection()
         if conn:
             try:
                 with closing(conn.cursor()) as cursor:
                     cursor.execute(sql_create_trades_table)
+                    cursor.execute(sql_create_snapshots_table)
+                    cursor.execute(sql_create_snapshots_index)
                     cursor.execute("PRAGMA table_info(trades)")
                     columns = [row[1] for row in cursor.fetchall()]
                     new_cols = ['spread', 'status', 'mae', 'mfe', 'mae_usc', 'mfe_usc',
@@ -138,6 +157,21 @@ class DBManager:
                 self.logger.error(f"Error initializing database: {e}")
             finally:
                 conn.close()
+
+    def log_account_snapshot(self, balance, equity, floating_pnl=0.0,
+                             open_trades=0, drawdown_pct=0.0,
+                             regime='UNKNOWN', rsi=None, spread=None):
+        """Queues an account snapshot record (every 5 minutes from engine)."""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        sql = """
+        INSERT INTO account_snapshots
+            (timestamp, balance, equity, floating_pnl, open_trades, drawdown_pct, regime, rsi, spread)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        self.task_queue.put(("sql_execute", (sql, (
+            timestamp, balance, equity, floating_pnl,
+            open_trades, drawdown_pct, regime, rsi, spread
+        )), {}))
 
     def log_trade(self, action, symbol, ticket=None, side=None, price=0.0, lots=0.0, sl=0.0, tp=0.0, spread=0.0, profit=0.0, comment=""):
         """Queues a trade event record into the database."""

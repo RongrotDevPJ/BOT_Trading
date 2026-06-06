@@ -64,6 +64,33 @@ class TimeFilterClient:
 
         # Reset flag when trading is allowed (not Friday or before stop hour)
         self.paused_logged = False
+
+        # --- Blocked Hours Filter ---
+        blocked_hours = getattr(config, 'BLOCKED_HOURS_UTC', [])
+        if blocked_hours:
+            utc_now = datetime.utcnow()
+            if utc_now.hour in blocked_hours:
+                if not self.paused_logged:
+                    self.logger.info(
+                        f"[TimeFilter] Hour {utc_now.hour:02d} UTC is in BLOCKED_HOURS_UTC={blocked_hours}. "
+                        f"New entries blocked."
+                    )
+                    self.paused_logged = True
+                return False
+
+        # --- Monday Filter ---
+        block_monday = getattr(config, 'BLOCK_MONDAY', False)
+        if block_monday:
+            utc_now = datetime.utcnow()
+            if utc_now.weekday() == 0:  # 0 = Monday
+                if not self.paused_logged:
+                    self.logger.info(
+                        "[TimeFilter] Monday trading blocked (BLOCK_MONDAY=True). "
+                        "Monday audit PF=0.14 from 86-trade DB."
+                    )
+                    self.paused_logged = True
+                return False
+
         return True
 
     def is_weekend(self):

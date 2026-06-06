@@ -1,3 +1,11 @@
+<# :
+@echo off
+setlocal
+set "BAT_FILE_PATH=%~f0"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "iex ((Get-Content -LiteralPath $env:BAT_FILE_PATH -Raw) -replace '(?s)^.*<#POWERSHELL_START#>', '')"
+exit /b %errorlevel%
+#>
+<#POWERSHELL_START#>
 $ErrorActionPreference = "SilentlyContinue"
 $Host.UI.RawUI.WindowTitle = "BOT_Trading Stop All"
 $botMains = @("core\engine.py", "simulation\sim_engine.py", "dashboard.py")
