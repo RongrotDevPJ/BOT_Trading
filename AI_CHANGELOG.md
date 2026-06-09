@@ -16,6 +16,17 @@ Format:
 
 ## 📈 Changelog
 
+### [2026-06-10] Critical Bug Fix — Phantom Trade Rows & ML Model Safety
+- **Files Modified:** `core/csv_logger.py`, `configs/XAUUSD_LIVE.py`, `tools/fix_db.py` (new)
+- **What was done:**
+  1. **Fixed phantom rows bug** — `csv_logger.log_event("Market Snapshot")` was inserting 1 empty row/hour into `trades` table via `log_trade()`. Added `SKIP_DB_ACTIONS` set to block non-trade events from writing to DB.
+  2. **Cleaned DB** — Deleted 51 phantom rows (all `side=''`, `status=NULL`, `profit=0.0`). DB is now clean.
+  3. **Disabled ML filter** — `ENABLE_ML_SIGNAL_FILTER` set to `False`. Models (`lgbm_buy.pkl`, `lgbm_sell.pkl`) don't exist yet. The filter uses `is_model_ready()` as safety guard anyway, but config now reflects reality.
+  4. **Created `tools/fix_db.py`** — Reusable DB inspection + cleanup script.
+- **Why it was done:** After 2 days of live running, DB showed 51 rows but ALL were phantom snapshot rows with no real trade data. Backtest tool showed "No closed trades found". Root cause traced to `csv_logger.py` line 97 calling `log_trade()` for every event type including Market Snapshots.
+- **Verified:** `tools/fix_db.py` output confirmed 51 phantom rows deleted, DB is now 0 rows (clean).
+- **Next step:** Wait for real trades to accumulate. Once N >= 20 closed BUY trades → ML trainer will auto-run daily.
+
 ### [2026-06-06] Structural Documentation & AI Workflow Update
 - **Files Modified:** `MASTER_PROMPT.md`, `SYSTEM_ARCHITECTURE.md`, `SYSTEM_DEEP_ANALYSIS.md`, `AI_CHANGELOG.md`
 - **What was done:** Added `SYSTEM_ARCHITECTURE.md`, `SYSTEM_DEEP_ANALYSIS.md`, and `AI_CHANGELOG.md`. Updated `MASTER_PROMPT.md` to force the AI to read these files and log actions.

@@ -57,8 +57,10 @@ RSI_SELL_LEVEL = 70   # Raised from 65 → 70 (SELL PF was 0.37, too many premat
 EMA_PERIOD    = 200
 EMA_TIMEFRAME = mt5.TIMEFRAME_M15
 
-# ── ML Signal Filter (NEW) ─────────────────────────────────────────────────────
-ENABLE_ML_SIGNAL_FILTER  = True   # Use LightGBM to score entry quality
+# ── ML Signal Filter ──────────────────────────────────────────────────────────
+# NOTE: Disabled until lgbm_buy.pkl / lgbm_sell.pkl are trained from real closed trades.
+# Will auto-enable once ML trainer runs successfully (needs N >= 20 closed trades per side).
+ENABLE_ML_SIGNAL_FILTER  = False  # Was True — disabled: models not trained yet
 ML_MIN_ENTRY_SCORE       = 0.55   # Min probability threshold (0.5=50%, 0.55=55%)
 ML_MODEL_PATH            = "data/ml_models/lgbm_signal.pkl"
 

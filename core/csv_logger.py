@@ -93,18 +93,22 @@ class CSVLogger:
             ]
             self.task_queue.put(row)
         
-        # Dual-Logging: SQLite (Now also non-blocking)
-        try:
-            self.db_manager.log_trade(
-                action=action,
-                symbol=self.symbol,
-                ticket=ticket,
-                side=side,
-                price=price if price else 0.0,
-                lots=lot_size if lot_size is not None else 0.0,
-                spread=spread if spread is not None else 0.0,
-                profit=profit if profit is not None else 0.0,
-                comment=f"{notes}"[:100]
-            )
-        except Exception as e:
-            print(f"Error queuing log to DB (via CSVLogger): {e}")
+        # Dual-Logging: SQLite (Only for real trade events, NOT market snapshots)
+        # Market Snapshot, Heartbeat etc. are CSV-only events — they pollute the trades table
+        SKIP_DB_ACTIONS = {"Market Snapshot", "Heartbeat", "Status", "Regime Check"}
+        if action not in SKIP_DB_ACTIONS:
+            try:
+                self.db_manager.log_trade(
+                    action=action,
+                    symbol=self.symbol,
+                    ticket=ticket,
+                    side=side,
+                    price=price if price else 0.0,
+                    lots=lot_size if lot_size is not None else 0.0,
+                    spread=spread if spread is not None else 0.0,
+                    profit=profit if profit is not None else 0.0,
+                    comment=f"{notes}"[:100]
+                )
+            except Exception as e:
+                print(f"Error queuing log to DB (via CSVLogger): {e}")
+
