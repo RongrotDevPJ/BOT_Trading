@@ -52,7 +52,7 @@ BE_LOCK_POINTS         = 20
 import MetaTrader5 as mt5
 TIMEFRAME     = mt5.TIMEFRAME_M5
 RSI_PERIOD    = 14
-RSI_BUY_LEVEL = 35
+RSI_BUY_LEVEL = 40   # Raised 35→40: Gold Bull Run — RSI rarely hits 35 (N=2 in 7 days). Revert if WR<50% at N≥20
 RSI_SELL_LEVEL = 70   # Raised from 65 → 70 (SELL PF was 0.37, too many premature SELL entries)
 EMA_PERIOD    = 200
 EMA_TIMEFRAME = mt5.TIMEFRAME_M15

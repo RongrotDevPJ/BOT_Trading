@@ -16,6 +16,18 @@ Format:
 
 ## 📈 Changelog
 
+### [2026-06-13] Post 1-Week Analysis — RSI Tuning + Equity Dashboard + Telegram /report
+- **Files Modified:** `configs/XAUUSD_LIVE.py`, `core/strategy.py`, `dashboard.py`, `core/notifier.py`, `tools/deep_analysis.py`, `data/db/trading_data.db`
+- **What was done:**
+  1. **RSI_BUY_LEVEL: 35 → 40** — After 1 week, only 2 trades fired. Gold in strong Bull Run; RSI rarely hits 35 on M5. Raised to 40 to collect more data. Revert if WR < 50% when N ≥ 20.
+  2. **DB Cleaned** — Deleted 51 phantom Market Snapshot rows from `trades` table (local copy). VPS needs `git pull + fix_db.py`.
+  3. **Entry Diagnostic Logger** — Added `[EntryDiag]` log every 15 minutes in `strategy.py` showing exactly why entries are blocked (RSI too high, EMA filter, etc.).
+  4. **Equity Curve Tab (Tab 5)** — Added new Dashboard tab showing: Balance/Equity overlay chart, Drawdown chart, Regime distribution pie chart. Powered by 1,247+ account_snapshots.
+  5. **Telegram /report command** — Added `/report` alongside existing `/status`. Returns 7-day summary: N trades, Win Rate, Net PnL, Best/Worst trade, Max DD, Balance change.
+- **Why it was done:** N=2 trades in 7 days = bot barely trading. Analysis showed RSI_BUY_LEVEL=35 is too strict for current Gold Bull Market. HMM regime stuck at RANGING 100% (needs investigation). Equity curve built from existing snapshot data. /report gives mobile monitoring without opening dashboard.
+- **Verification:** All files edited. git push pending to VPS. After VPS git pull + restart_bots: check bot logs for `[EntryDiag]` messages confirming filters, and check new Dashboard tab.
+- **Next steps when N ≥ 20:** Run `tools/backtest.py --optimize` to validate RSI=40 decision statistically.
+
 ### [2026-06-10] Critical Bug Fix — Phantom Trade Rows & ML Model Safety
 - **Files Modified:** `core/csv_logger.py`, `configs/XAUUSD_LIVE.py`, `tools/fix_db.py` (new)
 - **What was done:**

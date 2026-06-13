@@ -33,6 +33,8 @@ class SmartGridStrategy:
         self.active_excursions = {}
         self.max_basket_pnl = -1000000.0
         self.last_trailing_log_time = 0
+        self.last_diag_log_time = 0      # Entry diagnostic: log why entries blocked every 15min
+        self._diag_blocked_count = 0    # Count of blocked entry attempts since last log
 
         # Phase 3: Enhanced Analytics (Cycle Life MAE/MFE)
         self.min_basket_pnl = 1000000.0
@@ -209,6 +211,32 @@ class SmartGridStrategy:
 
         if time.time() - self.last_initial_entry_time < 120.0:
             return
+
+        # ── Entry Diagnostic: Log why we are NOT entering (every 15 minutes) ──
+        _now = time.time()
+        if _now - self.last_diag_log_time > 900:
+            positions_check = self.get_positions()
+            _reasons = []
+            if current_rsi is not None and current_rsi > config.RSI_BUY_LEVEL:
+                _reasons.append(f"RSI={current_rsi:.1f} > BUY_LEVEL={config.RSI_BUY_LEVEL}")
+            if current_ema is not None and tick is not None and tick.ask <= current_ema:
+                _reasons.append(f"Price({tick.ask:.2f}) <= EMA200({current_ema:.2f})")
+            if len(positions_check) > 0:
+                _reasons.append(f"Cycle active ({len(positions_check)} positions open)")
+            if _now < self.cooldown_until:
+                _reasons.append(f"Cooldown {int(self.cooldown_until - _now)}s remaining")
+            if _reasons:
+                self.logger.info(
+                    f"[EntryDiag] No entry in last 15min. Blocked by: {' | '.join(_reasons)} "
+                    f"| Blocked attempts: {self._diag_blocked_count}"
+                )
+            else:
+                self.logger.info(
+                    f"[EntryDiag] All filters PASS but no entry yet "
+                    f"(RSI={current_rsi:.1f} <= {config.RSI_BUY_LEVEL}, Price={tick.ask:.2f} > EMA={current_ema:.2f})"
+                )
+            self.last_diag_log_time = _now
+            self._diag_blocked_count = 0
 
         # Phase 5: Consecutive Loss Cooldown Gate
         if time.time() < self.cooldown_until:

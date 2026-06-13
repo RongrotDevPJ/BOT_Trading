@@ -392,11 +392,12 @@ def main():
     st.sidebar.markdown("**Max Grid Levels:** `2`")
     st.sidebar.markdown("**ML Model:** `86 trades (123KB)`")
 
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "🔴 LIVE XAUUSD BOT",
         "🧪 SIMULATION BOT (SMC + ML)",
         "📊 Analytics",
-        "📒 Trade Journal"
+        "📒 Trade Journal",
+        "📈 Equity Curve"
     ])
 
     is_mt5_connected = init_mt5()
@@ -580,6 +581,126 @@ def main():
         except Exception:
             df_j = pd.DataFrame()
         render_trade_journal(df_j)
+
+    # ─── TAB 5: EQUITY CURVE ─────────────────────────────────────────────────
+    with tab5:
+        st.subheader("📈 Equity Curve — Account Snapshot History")
+        st.caption("Data source: account_snapshots table (every 5 minutes from Live Bot)")
+        try:
+            conn_eq = sqlite3.connect(LIVE_DB_PATH, timeout=5)
+            df_eq = pd.read_sql_query(
+                """
+                SELECT timestamp, balance, equity, floating_pnl, open_trades,
+                       drawdown_pct, regime
+                FROM account_snapshots
+                ORDER BY timestamp ASC
+                """,
+                conn_eq
+            )
+            conn_eq.close()
+
+            if df_eq.empty:
+                st.info("No snapshot data yet. The bot needs to run for a few minutes to collect data.")
+            else:
+                df_eq["timestamp"] = pd.to_datetime(df_eq["timestamp"])
+                df_eq["unrealized_dd_pct"] = (
+                    (df_eq["balance"] - df_eq["equity"]) / df_eq["balance"] * 100
+                ).clip(lower=0)
+
+                # ── KPI Row ──────────────────────────────────────────────────
+                col1, col2, col3, col4 = st.columns(4)
+                start_bal = df_eq["balance"].iloc[0]
+                end_bal   = df_eq["balance"].iloc[-1]
+                net_change = end_bal - start_bal
+                max_dd     = df_eq["unrealized_dd_pct"].max()
+                days_running = (df_eq["timestamp"].iloc[-1] - df_eq["timestamp"].iloc[0]).days
+                col1.metric("Start Balance", f"{start_bal:.2f} USC")
+                col2.metric("Current Balance", f"{end_bal:.2f} USC",
+                            delta=f"{net_change:+.2f} USC")
+                col3.metric("Max Drawdown", f"{max_dd:.2f}%")
+                col4.metric("Days Running", f"{days_running}d {len(df_eq):,} snaps")
+
+                st.markdown("---")
+
+                # ── Balance & Equity Overlay ─────────────────────────────────
+                fig_eq = go.Figure()
+                fig_eq.add_trace(go.Scatter(
+                    x=df_eq["timestamp"], y=df_eq["balance"],
+                    name="Balance", line=dict(color="#00d4aa", width=2)
+                ))
+                fig_eq.add_trace(go.Scatter(
+                    x=df_eq["timestamp"], y=df_eq["equity"],
+                    name="Equity", line=dict(color="#ffa726", width=1.5, dash="dot"),
+                    fill="tonexty", fillcolor="rgba(255,167,38,0.08)"
+                ))
+                # Mark open trade periods
+                open_mask = df_eq["open_trades"] > 0
+                if open_mask.any():
+                    fig_eq.add_trace(go.Scatter(
+                        x=df_eq.loc[open_mask, "timestamp"],
+                        y=df_eq.loc[open_mask, "equity"],
+                        mode="markers",
+                        name="Open Trade",
+                        marker=dict(color="#ef5350", size=4, symbol="circle")
+                    ))
+                fig_eq.update_layout(
+                    title="Balance vs Equity Over Time",
+                    xaxis_title="Time",
+                    yaxis_title="USC",
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02),
+                    height=380,
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#e0e0e0")
+                )
+                st.plotly_chart(fig_eq, use_container_width=True)
+
+                # ── Drawdown Chart ────────────────────────────────────────────
+                fig_dd = go.Figure()
+                fig_dd.add_trace(go.Scatter(
+                    x=df_eq["timestamp"], y=-df_eq["unrealized_dd_pct"],
+                    name="Drawdown %", fill="tozeroy",
+                    line=dict(color="#ef5350", width=1.5),
+                    fillcolor="rgba(239,83,80,0.2)"
+                ))
+                fig_dd.update_layout(
+                    title="Unrealized Drawdown %",
+                    xaxis_title="Time",
+                    yaxis_title="Drawdown %",
+                    height=220,
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#e0e0e0")
+                )
+                st.plotly_chart(fig_dd, use_container_width=True)
+
+                # ── Regime Distribution ────────────────────────────────────────
+                st.markdown("#### Regime Distribution")
+                regime_counts = df_eq["regime"].value_counts().reset_index()
+                regime_counts.columns = ["Regime", "Count"]
+                regime_color_map = {
+                    "RANGING": "#00d4aa", "TRENDING": "#ffa726", "VOLATILE": "#ef5350", "UNKNOWN": "#9e9e9e"
+                }
+                fig_regime = px.pie(
+                    regime_counts, values="Count", names="Regime",
+                    color="Regime", color_discrete_map=regime_color_map,
+                    hole=0.4
+                )
+                fig_regime.update_layout(
+                    height=280, paper_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#e0e0e0"), showlegend=True
+                )
+                st.plotly_chart(fig_regime, use_container_width=True)
+
+                # ── Raw Data Expander ─────────────────────────────────────────
+                with st.expander("Raw Snapshot Data"):
+                    st.dataframe(
+                        df_eq.tail(200)[["timestamp","balance","equity",
+                                         "floating_pnl","open_trades","drawdown_pct","regime"]],
+                        use_container_width=True
+                    )
+        except Exception as e:
+            st.error(f"Error loading equity curve data: {e}")
 
 
 if __name__ == "__main__":

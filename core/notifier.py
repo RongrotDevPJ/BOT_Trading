@@ -81,6 +81,8 @@ class TelegramNotifier:
                             # Verify chat_id for security
                             if chat_id == self.chat_id and text.startswith("/status"):
                                 self._handle_status_command()
+                            elif chat_id == self.chat_id and text.startswith("/report"):
+                                self._handle_report_command()
             except Exception as e:
                 logger.debug(f"[Telegram Poll] error: {e}")
             time.sleep(5)  # Poll interval
@@ -122,6 +124,94 @@ class TelegramNotifier:
         except Exception as e:
             logger.error(f"[Telegram] Handle status error: {e}")
             self.send_telegram_message("Error fetching status.")
+
+    def _handle_report_command(self):
+        """Build and send a 7-day performance report when /report is requested."""
+        try:
+            import sqlite3
+            from configs import XAUUSD_LIVE as config
+
+            db_path = Path("data/db/trading_data.db")
+            if not db_path.exists():
+                self.send_telegram_message("No DB found yet.")
+                return
+
+            conn = sqlite3.connect(str(db_path), timeout=10)
+            cur = conn.cursor()
+
+            # 7-day closed trades stats
+            cur.execute("""
+                SELECT COUNT(*) as n,
+                       SUM(profit) as net,
+                       SUM(CASE WHEN profit > 0 THEN 1 ELSE 0 END) as wins,
+                       MAX(profit) as best,
+                       MIN(profit) as worst
+                FROM trades
+                WHERE status='CLOSED'
+                  AND timestamp >= datetime('now', '-7 days')
+            """)
+            trade_row = cur.fetchone()
+
+            # Balance start/end from snapshots (7 days)
+            cur.execute("""
+                SELECT balance, timestamp FROM account_snapshots
+                ORDER BY timestamp ASC LIMIT 1
+            """)
+            snap_first = cur.fetchone()
+            cur.execute("""
+                SELECT balance, equity, open_trades, regime, timestamp
+                FROM account_snapshots
+                ORDER BY timestamp DESC LIMIT 1
+            """)
+            snap_last = cur.fetchone()
+
+            # Max drawdown in 7 days
+            cur.execute("""
+                SELECT MAX(drawdown_pct) FROM account_snapshots
+                WHERE timestamp >= datetime('now', '-7 days')
+            """)
+            max_dd_row = cur.fetchone()
+            conn.close()
+
+            # Build report
+            n = trade_row[0] or 0
+            net = trade_row[1] or 0.0
+            wins = trade_row[2] or 0
+            best = trade_row[3] or 0.0
+            worst = trade_row[4] or 0.0
+            wr = (wins / n * 100) if n > 0 else 0.0
+
+            start_bal = snap_first[0] if snap_first else 0.0
+            end_bal   = snap_last[0] if snap_last else 0.0
+            cur_eq    = snap_last[1] if snap_last else 0.0
+            open_t    = snap_last[2] if snap_last else 0
+            regime    = snap_last[3] if snap_last else "N/A"
+            bal_change = end_bal - start_bal
+            max_dd = max_dd_row[0] if max_dd_row and max_dd_row[0] else 0.0
+
+            msg = (
+                f"📊 <b>WEEKLY REPORT</b> — {getattr(config, 'SYMBOL', 'XAUUSD')}\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📅 Period   : Last 7 Days\n"
+                f"💰 Balance  : {start_bal:.2f} → {end_bal:.2f} USC "
+                f"({bal_change:+.2f})\n"
+                f"📊 Equity   : {cur_eq:.2f} USC\n"
+                f"───────────────────────\n"
+                f"🎯 Trades   : {n} closed\n"
+                f"✅ Win Rate  : {wr:.1f}% ({wins}W/{n-wins}L)\n"
+                f"📈 Net PnL  : {net:+.2f} USC\n"
+                f"🏆 Best     : +{best:.2f} USC\n"
+                f"💀 Worst    : {worst:.2f} USC\n"
+                f"📉 Max DD   : {max_dd:.2f}%\n"
+                f"───────────────────────\n"
+                f"📦 Open Pos : {open_t}\n"
+                f"🧭 Regime   : {regime}\n"
+                f"⏰ Time     : {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+            )
+            self.send_telegram_message(msg)
+        except Exception as e:
+            logger.error(f"[Telegram] Handle report error: {e}")
+            self.send_telegram_message("Error generating report.")
 
     def _do_send(self, message: str):
         """Actual HTTP send to Telegram API."""
