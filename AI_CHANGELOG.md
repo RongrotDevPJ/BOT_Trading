@@ -16,6 +16,16 @@ Format:
 
 ## 📈 Changelog
 
+### [2026-06-14] Full AI Autonomy Grant — MASTER_PROMPT Major Upgrade
+- **Files Modified:** `MASTER_PROMPT.md`
+- **What was done:** System owner granted FULL AUTONOMOUS DEVELOPMENT AUTHORITY to the AI. MASTER_PROMPT.md was completely rewritten to include:
+  1. **Full Autonomy Grant section** — AI is authorised to read/modify/create/delete any project file, make all development decisions, run scripts, push to GitHub, and modify configs without asking permission.
+  2. **Non-Negotiable Boundaries** — Kill Switch, Max DD cap, SELL mode gate, no credential modification, no DB deletion.
+  3. **Autonomous Decision Framework** — 5-step process: Query DB → Backtest → Apply → Log → Deploy.
+  4. **Development Roadmap** — Phase 1 (N<30 Data Collection) → Phase 2 (Statistical Validation) → Phase 3 (ML Integration) → Phase 4 (Advanced Optimisation).
+- **Why it was done:** User requested AI to have 100% decision-making authority on all development aspects of the BOT_Trading system.
+- **Verification:** File written successfully.
+
 ### [2026-06-13] Post 1-Week Analysis — RSI Tuning + Equity Dashboard + Telegram /report
 - **Files Modified:** `configs/XAUUSD_LIVE.py`, `core/strategy.py`, `dashboard.py`, `core/notifier.py`, `tools/deep_analysis.py`, `data/db/trading_data.db`
 - **What was done:**
