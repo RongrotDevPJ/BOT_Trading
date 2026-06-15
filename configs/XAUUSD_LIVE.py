@@ -36,10 +36,10 @@ MAX_GAP_MULTIPLIER      = 4.0
 COOLDOWN_MINUTES        = 5
 
 # ── Basket Profit Management ───────────────────────────────────────────────────
-MIN_CYCLE_PROFIT_USC      = 25.0   # Min profit target per cycle
+MIN_CYCLE_PROFIT_USC      = 20.0   # Min profit target per cycle (was 25.0, lowered to allow more exits)
 BASKET_TP_POINTS          = 50
-BASKET_TRAILING_STEP_USD  = 6.0
-BASKET_HARD_STOP_USC      = -40.0  # Tightened: -80 → -40 USC (prevent large Grid losses)
+BASKET_TRAILING_STEP_USD  = 5.0    # Tighter trailing step (was 6.0) to lock profit faster
+BASKET_HARD_STOP_USC      = -60.0  # Loosened: -40 → -60 USC (0.01 lot XAUUSD: -40 USC = ~40pt move, too tight)
 
 # ── Exit Strategy ──────────────────────────────────────────────────────────────
 USE_TRAILING_STOP      = True
@@ -81,9 +81,12 @@ ENABLE_TREND_FILTER         = True
 ENABLE_TREND_FILTER_ON_GRID = False
 
 # ── Risk Management ────────────────────────────────────────────────────────────
-MAX_DD_PERCENT      = 10.0   # Tightened: 20% → 10%
+# NOTE 2026-06-15: MAX_DD was 10.0% and fired at 10.04% from a single 0.01-lot trade floating loss.
+# XAUUSD 0.01 lot: $1/pt. A 115 USC balance with 1 open lot at -11.5 USC = 10% DD.
+# Raised to 15% (within MASTER_PROMPT boundary) to prevent overly sensitive kill switch firing.
+MAX_DD_PERCENT      = 15.0   # Raised 10% → 15%: was triggering on normal floating drawdowns
 ENABLE_HEDGE_ON_DD  = True
-MAX_CONSECUTIVE_LOSSES = 2   # Tightened: 3 → 2
+MAX_CONSECUTIVE_LOSSES = 3   # Loosened 2 → 3: too restrictive for data collection phase
 
 # ── Direction Control (BUY Only Mode) ─────────────────────────────────────────
 # VERIFIED: SELL PF = 0.38 (N=46), BUY PF = 2.24 (N=40) from 86-trade DB
@@ -108,7 +111,7 @@ ENABLE_DAILY_TARGET          = True
 DAILY_TARGET_PERCENT         = 5.0
 DAILY_TARGET_TRAILING_PERCENT = 1.5
 ENABLE_DAILY_LOSS_LIMIT      = True
-DAILY_LOSS_LIMIT_PERCENT     = 5.0
+DAILY_LOSS_LIMIT_PERCENT     = 8.0   # Raised 5% → 8%: 5% on 115 USC = -5.75 USC in one 0.01-lot trade
 
 # ── Partial Close ──────────────────────────────────────────────────────────────
 ENABLE_PARTIAL_CLOSE      = True
