@@ -6,6 +6,8 @@ EVERY TIME you are asked to read this `MASTER_PROMPT.md`, you MUST also read:
 2. `SYSTEM_DEEP_ANALYSIS.md` (to understand the exact strategy mechanics, ML, and weaknesses)
 3. `AI_CHANGELOG.md` (to understand recent developments)
 
+**CRITICAL DIRECTIVE**: You MUST immediately load and read the custom skill located at `.agents/skills/xauusd-quant-master/SKILL.md` before taking any action. This skill acts as your central framework for Institutional Quant Development and system microservices architecture.
+
 Whenever you modify, fix, or add features to this system, you MUST append a detailed log of your actions to `AI_CHANGELOG.md`. This acts as our evolutionary development data.
 
 ---
