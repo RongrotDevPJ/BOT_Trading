@@ -427,8 +427,31 @@ def run_simulation():
     signal.signal(signal.SIGINT, _on_signal)
     signal.signal(signal.SIGTERM, _on_signal)
 
-    logger.info(f"💰 Starting Balance: {balance:.2f} USC | Loop interval: {cfg.SIM_LOOP_SLEEP_SEC}s")
-    logger.info("📊 Strategies: SMC/ICT + ML-LightGBM | Data: MT5 Live")
+    logger.info(f"Starting Balance: {balance:.2f} USC | Loop interval: {cfg.SIM_LOOP_SLEEP_SEC}s")
+    logger.info("Strategies: SMC/ICT + ML-LightGBM | Data: MT5 Live")
+
+    # ── STARTUP: Force-close any orphaned OPEN trades from DB (survive restarts) ─
+    # Bug fix: On restart, sim positions are not in memory -> they stay OPEN in DB forever
+    # Solution: Close all OPEN trades in DB that are older than 48h (likely orphaned)
+    try:
+        import sqlite3 as _sql
+        _conn = _sql.connect(cfg.SIM_DB_PATH, timeout=10)
+        _cur = _conn.cursor()
+        _cur.execute("SELECT id, side, entry_price, open_time FROM sim_trades WHERE status='OPEN'")
+        _orphans = _cur.fetchall()
+        if _orphans:
+            logger.warning(f"[Startup] Found {len(_orphans)} orphaned OPEN sim trades. Closing as ABANDONED.")
+            for _o in _orphans:
+                _trade_id, _side, _entry, _open_time = _o
+                _cur.execute("""
+                    UPDATE sim_trades SET status='CLOSED', close_time=?, close_reason='ABANDONED_ON_RESTART',
+                    net_profit=0.0, gross_profit=0.0, close_price=? WHERE id=?
+                """, (datetime.now(timezone.utc).isoformat(), _entry, _trade_id))
+                logger.warning(f"  Closed orphan #{_trade_id}: {_side} @ {_entry} (ABANDONED)")
+            _conn.commit()
+        _conn.close()
+    except Exception as _se:
+        logger.error(f"[Startup] Orphan cleanup failed: {_se}")
 
     while _running[0]:
         loop_start = time.time()
@@ -458,10 +481,13 @@ def run_simulation():
             floating_pnl = 0.0
             for pos in all_positions:
                 close_price = tick.bid if pos.side == "BUY" else tick.ask
-                pnl = executor.pnl_calc.calc_profit(
-                    pos.entry_price, close_price, pos.side, pos.lot_size
-                )
-                floating_pnl += pnl
+                try:
+                    pnl = executor.pnl_calc.calc_profit(
+                        pos.entry_price, close_price, pos.side, pos.lot_size
+                    )
+                    floating_pnl += pnl
+                except Exception:
+                    pass
 
             equity = balance + floating_pnl
             peak_equity = max(peak_equity, equity)

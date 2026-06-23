@@ -270,19 +270,22 @@ class SMCStrategy:
 
     def _check_entry(self, rates, ask, bid, atr, account, dt):
         """Analyze structure and enter if OB retest detected."""
-        if time.time() - self._last_entry_time < 300:  # 5-min cooldown
+        if time.time() - self._last_entry_time < 120:  # Reduced 300->120s cooldown
             return
 
         struct = self.structure.analyze(rates)
         trend  = struct.get("trend", "NEUTRAL")
         ob     = struct.get("last_bos")
 
-        # Debug log every 10 minutes to show what SMC sees
+        # Debug log every 5 minutes (was 10 min)
         now = time.time()
-        if now - self._last_debug_log > 600:
+        if now - self._last_debug_log > 300:
+            last_h = struct.get("last_high", 0)
+            last_l = struct.get("last_low", 0)
             logger.info(
-                f"[SMC DEBUG] trend={trend} | ob={'Found' if ob else 'None'} | "
-                f"price={ask:.2f} | open_pos={len(self.open_positions)}"
+                f"[SMC] trend={trend} | ob={'Found' if ob else 'None'} | "
+                f"price={ask:.2f} | HH={last_h:.2f} LL={last_l:.2f} | "
+                f"open_pos={len(self.open_positions)}"
             )
             self._last_debug_log = now
 
@@ -292,20 +295,26 @@ class SMCStrategy:
         equity   = account.get("equity", self.cfg.SIM_INITIAL_BALANCE)
         ob_id    = f"{ob.side}_{ob.high:.2f}_{ob.low:.2f}"
 
-        # Expire OB tracker after 4 hours (prevent permanent lock)
+        # Expire OB tracker after 4 hours
         OB_EXPIRE_SEC = 14400
         if ob_id in self._ob_retest_tracker:
             entry_time = self._ob_retest_tracker[ob_id]
             if isinstance(entry_time, bool):
-                return  # Legacy bool entry — skip (already traded)
-            if time.time() - entry_time > OB_EXPIRE_SEC:
-                del self._ob_retest_tracker[ob_id]  # Expired, allow re-entry
+                del self._ob_retest_tracker[ob_id]  # Clear legacy bool
+            elif time.time() - entry_time > OB_EXPIRE_SEC:
+                del self._ob_retest_tracker[ob_id]
             else:
-                return  # Still active, already traded
+                return
+
+        # EXTENDED OB zone: add 0.5 ATR buffer above/below OB for more hits
+        # In trending markets, price rarely returns to exact OB - needs wider zone
+        ob_extension = atr * 0.5
+        ob_low_ext  = ob.low  - ob_extension
+        ob_high_ext = ob.high + ob_extension
 
         if ob.side == "BULL":
-            # Enter BUY if price has returned into the OB zone (after BOS above)
-            if ob.low <= ask <= ob.high:
+            # Enter BUY if price is near or in the OB zone (extended)
+            if ob_low_ext <= ask <= ob_high_ext:
                 sl = ob.low - (atr * self.cfg.SMC_SL_ATR_MULTIPLIER * 0.01)
                 sl_pts = (ask - sl) / 0.01
                 if sl_pts <= 0:
@@ -334,7 +343,7 @@ class SMCStrategy:
                     logger.debug(f"[SMC] BUY fill failed @ {ask:.2f} OB=[{ob.low:.2f}-{ob.high:.2f}]")
 
         elif ob.side == "BEAR":
-            if ob.low <= bid <= ob.high:
+            if ob_low_ext <= bid <= ob_high_ext:
                 sl = ob.high + (atr * self.cfg.SMC_SL_ATR_MULTIPLIER * 0.01)
                 sl_pts = (sl - bid) / 0.01
                 if sl_pts <= 0:
@@ -355,11 +364,11 @@ class SMCStrategy:
                 if fill.success:
                     pos = self._register_position(fill, order, sl, tp1, tp2, atr)
                     logger.info(
-                        f"[SMC] 🔴 SELL entry @ {fill.fill_price:.2f} | "
+                        f"[SMC] SELL entry @ {fill.fill_price:.2f} | "
                         f"SL:{sl:.2f} TP1:{tp1:.2f} TP2:{tp2:.2f} | "
-                        f"Lot:{lot:.2f}"
+                        f"Lot:{lot:.2f} OB zone [{ob.low:.2f}-{ob.high:.2f}] (ext)"
                     )
-                    self._ob_retest_tracker[ob_id] = time.time()  # Store timestamp, not bool
+                    self._ob_retest_tracker[ob_id] = time.time()
                     self._last_entry_time = time.time()
                 else:
                     logger.debug(f"[SMC] SELL fill failed @ {bid:.2f} OB=[{ob.low:.2f}-{ob.high:.2f}]")
