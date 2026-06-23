@@ -788,16 +788,57 @@ class SmartGridStrategy:
                 self._close_cycle_cleanup(executor, positions, tick, total_pnl)
                 return
 
-        # 5b. HARD BASKET STOP LOSS (NEW) — prevents catastrophic loss in strong trends
+        # 5b. PER-TRADE HARD STOP LOSS (2026-06-24) — fires BEFORE basket stop
+        #     Prevents a single Sunday-gap/spike trade from destroying the whole basket
+        per_trade_stop = getattr(config, 'PER_TRADE_HARD_STOP_USC', -20.0)
+        max_hold_hours = getattr(config, 'PER_TRADE_MAX_HOLD_HOURS', 48.0)
+        current_unix = time.time()
+        for p in positions:
+            trade_pnl = p.profit
+            hold_hours = (current_unix - p.time) / 3600.0
+            # Per-trade hard stop
+            if trade_pnl <= per_trade_stop:
+                self.logger.critical(
+                    f"[PerTradeSL] Ticket {p.ticket} profit={trade_pnl:.2f} USC "
+                    f"<= per-trade stop={per_trade_stop:.2f}. Force-closing."
+                )
+                send_telegram_message(
+                    f"<b>[PerTradeSL] {config.SYMBOL}</b>\n"
+                    f"Ticket: {p.ticket} | Loss: {trade_pnl:.2f} USC\n"
+                    f"Threshold: {per_trade_stop:.2f} USC | Closing now."
+                )
+                executor.close_position(p, tick, is_trailing_stop=False)
+                self.active_excursions.pop(p.ticket, None)
+            # Max hold time force-close
+            elif hold_hours >= max_hold_hours and trade_pnl < 0:
+                self.logger.warning(
+                    f"[MaxHold] Ticket {p.ticket} held {hold_hours:.1f}h "
+                    f"with loss {trade_pnl:.2f} USC. Force-closing stale trade."
+                )
+                send_telegram_message(
+                    f"<b>[MaxHold] {config.SYMBOL}</b>\n"
+                    f"Ticket: {p.ticket} | Held: {hold_hours:.1f}h | PnL: {trade_pnl:.2f} USC\n"
+                    f"Stale losing trade closed."
+                )
+                executor.close_position(p, tick, is_trailing_stop=False)
+                self.active_excursions.pop(p.ticket, None)
+
+        # Refresh positions after per-trade closes
+        positions = self.get_positions()
+        if not positions:
+            return
+
+        # 5c. HARD BASKET STOP LOSS — prevents catastrophic loss in strong trends
+        total_pnl = sum(p.profit for p in positions)
         hard_stop = getattr(config, 'BASKET_HARD_STOP_USC', -80.0)
         if total_pnl <= hard_stop:
             self.logger.critical(
-                f"🚨 [HardBasketSL] Basket loss ${total_pnl:.2f} <= Hard Stop ${hard_stop:.2f}. "
-                f"Closing ALL {len(positions)} positions to prevent further loss."
+                f"[HardBasketSL] Basket loss {total_pnl:.2f} USC <= Hard Stop {hard_stop:.2f}. "
+                f"Closing ALL {len(positions)} positions."
             )
             send_telegram_message(
-                f"🚨 <b>Hard Basket SL Hit: {config.SYMBOL}</b>\n"
-                f"Loss: ${total_pnl:.2f} USC exceeded limit ${hard_stop:.2f} USC\n"
+                f"<b>Hard Basket SL Hit: {config.SYMBOL}</b>\n"
+                f"Loss: {total_pnl:.2f} USC exceeded limit {hard_stop:.2f} USC\n"
                 f"Closing {len(positions)} position(s) now."
             )
             for p in positions:

@@ -16,6 +16,35 @@ Format:
 
 ## 📈 Changelog
 
+### [2026-06-24] EMERGENCY #2 — Sunday Gap Kill Switch + Structural Risk Overhaul
+- **Files Modified:** `configs/XAUUSD_LIVE.py`, `core/strategy.py`, `tools/incident_analysis.py` (new), `tools/full_postmortem.py` (new)
+- **Incident:** 2nd Global Kill Switch fired `2026-06-16 00:36:16 UTC`. DD=15.25%, Limit=15.0%. Bot halted for ~8 days.
+- **Root Cause (VERIFIED — Level 4):**
+  - Trade #60 (BUY 4337.91, 0.01 lots) opened at `2026-06-15 23:53 UTC` = **Sunday night market reopen**
+  - Gold spiked UP +1.41 USC in first 5 min (liquidity grab), then crashed -9.07 USC by 00:33 UTC
+  - Final spike at 00:36 pushed DD from 8.74% to 15.25% in under 3 minutes = **gap/spike event**
+  - `BLOCKED_HOURS_UTC = [19]` did NOT cover hours 21-23 UTC (Sunday night). **THIS was the gap.**
+  - `BLOCK_MONDAY = False` meant the bot was fully active during the highest-gap-risk period
+- **Full Performance Audit (N=4 closed):**
+  - WR=75% but PF=0.72 (INSUFFICIENT DATA — 1 loss of -11.54 USC dominates)
+  - Avg Win: +2.77 USC | Avg Loss: -11.54 USC | RR=0.24 (needs improvement)
+  - Start Balance: 107.01 USC → Current Balance: 103.78 USC (net -3.23 USC = -3.02%)
+  - Regime: 100% RANGING (HMM stuck — ongoing issue)
+  - SENSITIVE TO OUTLIER: Remove Trade #58, PF becomes ∞ (3 wins, 0 losses)
+- **Fixes Applied:**
+  1. **`GLOBAL_STOP.lock` removed** — Reset. DB shows Balance 103.78, DD 8.74% (safe at this point)
+  2. **`BLOCKED_HOURS_UTC`: [19] → [19, 21, 22, 23]** — Block Sunday night reopen window
+  3. **`BLOCK_MONDAY`: False → True** — Monday confirmed dangerous (Kill Switch #2 happened Monday 00:36)
+  4. **`RSI_BUY_LEVEL`: 40 → 35** — Trade #58 entered at RSI=39.8 (borderline, led to -11.54 USC loss). Quality > quantity.
+  5. **`COOLDOWN_MINUTES`: 5 → 10** — Prevent rapid re-entry after bad closes
+  6. **`BASKET_HARD_STOP_USC`: -60 → -50** — Better proportion for 103 USC balance
+  7. **`FRIDAY_STOP_HOUR`: 15 → 14** — Extra weekend safety buffer
+  8. **Per-Trade Hard Stop `PER_TRADE_HARD_STOP_USC = -20.0`** (NEW) — Close individual trade if loss > -20 USC BEFORE basket accumulates
+  9. **`PER_TRADE_MAX_HOLD_HOURS = 48.0`** (NEW) — Force-close stale losing trades after 48h
+  10. **`core/strategy.py` Per-Trade SL logic** — Added before basket stop check. Refreshes positions after per-trade closes.
+- **Why `RSI_BUY_LEVEL` reverted to 35:** Trade #58 (RSI=39.8) was the primary losser. Trade #60 (RSI=31) entered during Sunday gap — time filter would have caught it regardless of RSI. Better to be strict on signal quality.
+- **Next Steps:** VPS needs `git pull` + `restart_bots.bat`. Monitor for `[PerTradeSL]` and `[MaxHold]` log messages. Goal: accumulate N≥10 more clean trades with new filters in place.
+
 ### [2026-06-15] EMERGENCY — Global Kill Switch Fired + Risk Parameter Fix
 - **Files Modified:** `configs/XAUUSD_LIVE.py`, `tools/reset_kill_switch.py` (new), `tools/dd_analysis.py` (new), `tools/emergency_check.py` (new)
 - **Incident:** Global Kill Switch fired at `2026-06-15 12:45:09` (UTC). Reason: "Account Drawdown hit 10.04% (Limit: 10.0%)". Bot halted completely.

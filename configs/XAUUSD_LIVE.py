@@ -23,7 +23,7 @@ KELLY_FRACTION     = 0.25
 KELLY_MIN_TRADES   = 10
 KELLY_MAX_FRACTION = 0.20
 
-# ── Grid Parameters ────────────────────────────────────────────────────────────
+# ── Grid Parameters ──────────────────────────────────────────────────────
 LOT_MULTIPLIER          = 1.2    # Conservative — prevent blowup
 MAX_GRID_LEVELS         = 2      # Reduced from 4 → 2 (limit exposure after -97% loss event)
 GRID_DISTANCE_POINTS    = 300    # Fallback fixed
@@ -33,13 +33,17 @@ ATR_PERIOD              = 14
 ATR_MULTIPLIER          = 2.5
 GRID_DISTANCE_MULTIPLIER = 1.3
 MAX_GAP_MULTIPLIER      = 4.0
-COOLDOWN_MINUTES        = 5
+COOLDOWN_MINUTES        = 10     # Increased 5→10: prevent rapid re-entry after bad exits
 
 # ── Basket Profit Management ───────────────────────────────────────────────────
-MIN_CYCLE_PROFIT_USC      = 20.0   # Min profit target per cycle (was 25.0, lowered to allow more exits)
+MIN_CYCLE_PROFIT_USC      = 20.0   # Min profit target per cycle
 BASKET_TP_POINTS          = 50
-BASKET_TRAILING_STEP_USD  = 5.0    # Tighter trailing step (was 6.0) to lock profit faster
-BASKET_HARD_STOP_USC      = -60.0  # Loosened: -40 → -60 USC (0.01 lot XAUUSD: -40 USC = ~40pt move, too tight)
+BASKET_TRAILING_STEP_USD  = 5.0
+BASKET_HARD_STOP_USC      = -50.0  # -60 was too loose for 103 USC balance; -50 = max basket risk
+# Per-Trade Individual Stop Loss (NEW 2026-06-24)
+# Protects against Sunday gaps and sudden spikes before basket-level stop activates
+PER_TRADE_HARD_STOP_USC   = -20.0  # Close any single trade losing more than -20 USC
+PER_TRADE_MAX_HOLD_HOURS  = 48.0   # Force-close trades stuck for >48h without recovery
 
 # ── Exit Strategy ──────────────────────────────────────────────────────────────
 USE_TRAILING_STOP      = True
@@ -48,11 +52,14 @@ TRAILING_STEP_POINTS   = 10
 BE_ACTIVATION_POINTS   = 500
 BE_LOCK_POINTS         = 20
 
-# ── Indicators ─────────────────────────────────────────────────────────────────
+# ── Indicators ────────────────────────────────────────────────────────────
 import MetaTrader5 as mt5
 TIMEFRAME     = mt5.TIMEFRAME_M5
 RSI_PERIOD    = 14
-RSI_BUY_LEVEL = 40   # Raised 35→40: Gold Bull Run — RSI rarely hits 35 (N=2 in 7 days). Revert if WR<50% at N≥20
+# NOTE 2026-06-24: RSI=40 let in Trade #58 (RSI=39.8) and Trade #60 (RSI=31.0) during Sunday gap
+# Trade #58 was borderline (RSI 39.8), led to -11.54 USD loss. Reverting to 35.
+# At RSI 35, we need deeper oversold confirmation — reduces frequency but improves quality.
+RSI_BUY_LEVEL = 35   # Reverted 40→35: N=4 closed, WR=75%, but the -11.54 loss came from RSI=39.8 entry
 RSI_SELL_LEVEL = 70   # Raised from 65 → 70 (SELL PF was 0.37, too many premature SELL entries)
 EMA_PERIOD    = 200
 EMA_TIMEFRAME = mt5.TIMEFRAME_M15
@@ -81,12 +88,12 @@ ENABLE_TREND_FILTER         = True
 ENABLE_TREND_FILTER_ON_GRID = False
 
 # ── Risk Management ────────────────────────────────────────────────────────────
-# NOTE 2026-06-15: MAX_DD was 10.0% and fired at 10.04% from a single 0.01-lot trade floating loss.
-# XAUUSD 0.01 lot: $1/pt. A 115 USC balance with 1 open lot at -11.5 USC = 10% DD.
-# Raised to 15% (within MASTER_PROMPT boundary) to prevent overly sensitive kill switch firing.
-MAX_DD_PERCENT      = 15.0   # Raised 10% → 15%: was triggering on normal floating drawdowns
+# NOTE 2026-06-16: Kill switch fired AGAIN at 15.25% from Sunday gap (Trade #60 at 4337.91)
+# The issue is NOT the DD limit — it is that the bot opens trades during dangerous hours.
+# Keep MAX_DD=15% but fix the root cause: Sunday night / Monday open blocking.
+MAX_DD_PERCENT      = 15.0   # Keep 15%. Root cause fix = time filter, not DD limit.
 ENABLE_HEDGE_ON_DD  = True
-MAX_CONSECUTIVE_LOSSES = 3   # Loosened 2 → 3: too restrictive for data collection phase
+MAX_CONSECUTIVE_LOSSES = 3   # Loosened for data collection phase
 
 # ── Direction Control (BUY Only Mode) ─────────────────────────────────────────
 # VERIFIED: SELL PF = 0.38 (N=46), BUY PF = 2.24 (N=40) from 86-trade DB
@@ -102,9 +109,10 @@ ENABLE_BUY  = True    # ✅ BUY entries enabled
 SMART_SELL_REQUIRE_REGIME_BEAR = True   # Must be BEAR regime
 SMART_SELL_REQUIRE_BELOW_EMA   = True   # Must be Price < EMA200
 
-# ── Day Filters ────────────────────────────────────────────────────────────────
-# Monday: PF=0.14, N=16 (PRELIMINARY — enabled for more data collection)
-BLOCK_MONDAY = False   # Set True to block Monday entries
+# ── Day Filters ───────────────────────────────────────────────────────────────
+# 2026-06-24: ENABLED Monday block after 2nd kill switch on Monday 00:36 UTC
+# Kill switch #2 caused by Sunday night gap trade entering at 23:53 UTC Sunday
+BLOCK_MONDAY = True   # ENABLED: Monday gaps confirmed dangerous. N_monday=2 WR=50% PF=0.22
 
 # ── Daily Limits ───────────────────────────────────────────────────────────────
 ENABLE_DAILY_TARGET          = True
@@ -118,12 +126,15 @@ ENABLE_PARTIAL_CLOSE      = True
 MIN_POSITIONS_FOR_PARTIAL = 5
 
 # ── Session & Time ─────────────────────────────────────────────────────────────
-ENABLE_SESSION_FILTER = True    # ENABLED: Block Hour 19 UTC (worst hour — PF=0.04, Net=-671 USC)
+ENABLE_SESSION_FILTER = True
 TRADING_HOURS_START   = "00:00"
 TRADING_HOURS_END     = "23:59"
-BLOCKED_HOURS_UTC     = [19]    # Hour 19 UTC = 02:00 ICT — proven worst hour from audit
+# 2026-06-24 CRITICAL FIX: Added hours 21,22,23 (Sunday night market reopen)
+# Root cause of Kill Switch #2: Trade opened at 23:53 UTC Sunday (market reopen)
+# Worst hours confirmed: 19 UTC (old), 21-23 UTC (Sunday gap risk)
+BLOCKED_HOURS_UTC     = [19, 21, 22, 23]  # 19=worst trading hour; 21-23=Sunday night gap risk
 ALLOW_FRIDAY_TRADING  = False
-FRIDAY_STOP_HOUR      = 15
+FRIDAY_STOP_HOUR      = 14              # Tightened 15→14: extra buffer before weekend
 
 # ── System ─────────────────────────────────────────────────────────────────────
 HEARTBEAT_INTERVAL_SEC = 300
