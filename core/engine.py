@@ -212,9 +212,12 @@ def main():
                         cached_acc_drawdown_pct = ((cached_balance - cached_equity) / cached_balance) * 100
 
                     # 2. Symbol-specific (for Detailed Display)
+                    # Sync recent 30 days deals to SQLite so offline/multi-day closes are never missed
+                    deals_sync = client.get_history_deals(symbol=config.SYMBOL, magic=config.MAGIC_NUMBER, days=30)
+                    strategy.csv_logger.db_manager.sync_deals(deals_sync, active_excursions=strategy.active_excursions)
+                    
+                    # Today's deals for UI Daily Realized Profit display
                     deals = client.get_history_deals(symbol=config.SYMBOL, magic=config.MAGIC_NUMBER, days=0)
-                    # Sync deals to SQLite for accurate persistent history
-                    strategy.csv_logger.db_manager.sync_deals(deals, active_excursions=strategy.active_excursions)
                     symbol_realized_profit = sum(d.profit + getattr(d, 'commission', 0.0) + d.swap for d in deals)
                     
                     open_pos = client.get_open_positions(symbol=config.SYMBOL, magic=config.MAGIC_NUMBER)

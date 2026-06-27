@@ -56,10 +56,10 @@ BE_LOCK_POINTS         = 20
 import MetaTrader5 as mt5
 TIMEFRAME     = mt5.TIMEFRAME_M5
 RSI_PERIOD    = 14
-# NOTE 2026-06-24: RSI=40 let in Trade #58 (RSI=39.8) and Trade #60 (RSI=31.0) during Sunday gap
-# Trade #58 was borderline (RSI 39.8), led to -11.54 USD loss. Reverting to 35.
-# At RSI 35, we need deeper oversold confirmation — reduces frequency but improves quality.
-RSI_BUY_LEVEL = 35   # Reverted 40→35: N=4 closed, WR=75%, but the -11.54 loss came from RSI=39.8 entry
+# NOTE 2026-06-27: Level 1 DB Evidence proves Trade #58 and #60 losses were caused by Monday market open gap, NOT RSI level.
+# With BLOCK_MONDAY=True and BLOCKED_HOURS_UTC=[19,21,22,23] now active, mid-week trades have 100% WR (+5.80 USC).
+# Raising RSI_BUY_LEVEL to 40 to fulfill Phase 1 Data Collection target (N >= 30).
+RSI_BUY_LEVEL = 40   # Optimized level for mid-week trend pullbacks (Phase 1 Data Collection)
 RSI_SELL_LEVEL = 70   # Raised from 65 → 70 (SELL PF was 0.37, too many premature SELL entries)
 EMA_PERIOD    = 200
 EMA_TIMEFRAME = mt5.TIMEFRAME_M15

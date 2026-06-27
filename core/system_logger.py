@@ -48,6 +48,13 @@ def setup_logger(bot_name):
     logger.addHandler(file_handler)
     logger.addHandler(console_handler)
     
+    # Configure root logger so other modules (SmartGrid, NewsFilter, TimeFilter) also log to file
+    root_logger = logging.getLogger()
+    if not root_logger.handlers:
+        root_logger.setLevel(logging.INFO)
+        root_logger.addHandler(file_handler)
+        root_logger.addHandler(console_handler)
+    
     # Prevent propagation to the root logger to avoid double printing
     logger.propagate = False
     
